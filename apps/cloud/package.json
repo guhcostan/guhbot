@@ -1,0 +1,35 @@
+{
+  "name": "@guhbot/cloud",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Hosted mode: a gateway that runs one isolated agent host per tenant.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "guhbot-cloud": "./dist/cli.js"
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b",
+    "start": "node dist/cli.js"
+  },
+  "dependencies": {
+    "@guhbot/agent": "workspace:*",
+    "@guhbot/host-core": "workspace:*",
+    "@guhbot/protocol": "workspace:*",
+    "@guhbot/server": "workspace:*",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.13"
+  }
+}
