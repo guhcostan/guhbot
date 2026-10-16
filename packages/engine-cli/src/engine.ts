@@ -196,9 +196,16 @@ async function probeExecutable(
     // The executable exists — it started — it just never answered. Saying
     // "unavailable" here would be wrong, and saying "installed" without the
     // caveat would hide a real problem.
+    //
+    // The version is deliberately null rather than the first line we happened to
+    // read. `--version` is the one question this process did not answer, and what
+    // it prints instead is not a version: a banner, a progress line, or a JSON
+    // event. Reporting that as the version is worse than reporting nothing,
+    // because a caller has no way to tell it apart from a real one — and whether
+    // the line arrived before the kill is a race, which is how this was found.
     return {
       available: true,
-      version,
+      version: null,
       reason: `${spec.name} did not answer "${[...spec.versionArgs].join(' ')}" within ${runtime.probeTimeoutMs}ms.`,
     };
   }
