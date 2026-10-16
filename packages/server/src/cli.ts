@@ -158,6 +158,18 @@ async function main(): Promise<void> {
   const messagesAllow = (values['messages-allow'] ?? '').split(',').map((h) => h.trim()).filter((h) => h.length > 0);
 
   const mcpServers = values['mcp-config'] !== undefined ? readMcpConfig(values['mcp-config']) : [];
+  // The scheduler starts runs on a host that does not exist yet, because the host
+  // needs the scheduler's tools at construction. A late-bound getter breaks the
+  // cycle: the capability declares its tools now and only dereferences the host
+  // from its first tick, which runs after this function has finished building it.
+  let hostRef: Host | undefined;
+  const hostGetter = (): Host => {
+    if (hostRef === undefined) {
+      throw new Error('the scheduler ran before the host was constructed; this is a bug in the CLI wiring');
+    }
+    return hostRef;
+  };
+
   const mounted = await mountCapabilities({
     dataDir,
     allowedHosts,
@@ -165,6 +177,10 @@ async function main(): Promise<void> {
     browser: { enabled: browserHosts.length > 0 },
     mcp: { allowStdio: values['mcp-allow-stdio'], servers: mcpServers },
     messages: { allowed: messagesAllow },
+    // On by default: a canvas only ever writes inside this host's own store, and
+    // "works while you sleep" is the point of a host you leave running.
+    canvas: { enabled: true },
+    scheduler: { host: hostGetter },
   });
   // The browser shares the egress list with http_fetch, so a host that allows
   // one allows the other; `--allowed-hosts` alone is enough for both.
@@ -212,6 +228,14 @@ async function main(): Promise<void> {
     ...(executor ? { executor } : {}),
     ...(Object.keys(mounted.extraMethods).length > 0 ? { extraMethods: mounted.extraMethods } : {}),
   });
+  hostRef = host;
+
+  // Harmless to do after construction, and honest about the end state: if a
+  // capability could not prepare, it says so on the console rather than at the
+  // first run.
+  for (const note of mounted.notes) {
+    process.stderr.write(`  note          ${note}\n`);
+  }
 
   mkdirSync(workspace, { recursive: true });
 
@@ -243,10 +267,6 @@ async function main(): Promise<void> {
       '',
     ].join('\n'),
   );
-
-  for (const note of mounted.notes) {
-    process.stdout.write(`  note          ${note}\n`);
-  }
 
   process.stdout.write(
     '  To reach this host from a phone, run the companion:\n' +

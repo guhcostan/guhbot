@@ -169,6 +169,50 @@ importers:
         specifier: ^1.64.1
         version: 1.64.1
 
+  packages/canvas:
+    dependencies:
+      '@guhbot/agent':
+        specifier: workspace:*
+        version: link:../agent
+      '@guhbot/host-core':
+        specifier: workspace:*
+        version: link:../host-core
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+
+  packages/companion:
+    dependencies:
+      '@guhbot/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+      ws:
+        specifier: ^8.18.0
+        version: 8.22.0
+    devDependencies:
+      '@guhbot/host-core':
+        specifier: workspace:*
+        version: link:../host-core
+      '@guhbot/server':
+        specifier: workspace:*
+        version: link:../server
+      '@types/ws':
+        specifier: ^8.5.13
+        version: 8.18.2
+
+  packages/engine-cli:
+    dependencies:
+      '@guhbot/agent':
+        specifier: workspace:*
+        version: link:../agent
+      '@guhbot/host-core':
+        specifier: workspace:*
+        version: link:../host-core
+    devDependencies:
+      '@guhbot/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+
   packages/host-core:
     dependencies:
       '@guhbot/protocol':
@@ -211,6 +255,21 @@ importers:
         specifier: ^3.24.1
         version: 3.25.76
 
+  packages/scheduler:
+    dependencies:
+      '@guhbot/agent':
+        specifier: workspace:*
+        version: link:../agent
+      '@guhbot/host-core':
+        specifier: workspace:*
+        version: link:../host-core
+      '@guhbot/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+
   packages/server:
     dependencies:
       '@guhbot/agent':
@@ -219,6 +278,12 @@ importers:
       '@guhbot/browser':
         specifier: workspace:*
         version: link:../browser
+      '@guhbot/canvas':
+        specifier: workspace:*
+        version: link:../canvas
+      '@guhbot/engine-cli':
+        specifier: workspace:*
+        version: link:../engine-cli
       '@guhbot/host-core':
         specifier: workspace:*
         version: link:../host-core
@@ -231,6 +296,9 @@ importers:
       '@guhbot/protocol':
         specifier: workspace:*
         version: link:../protocol
+      '@guhbot/scheduler':
+        specifier: workspace:*
+        version: link:../scheduler
       ws:
         specifier: ^8.18.0
         version: 8.22.0

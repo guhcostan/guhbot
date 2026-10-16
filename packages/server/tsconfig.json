@@ -19,6 +19,12 @@
       "path": "../browser"
     },
     {
+      "path": "../canvas"
+    },
+    {
+      "path": "../engine-cli"
+    },
+    {
       "path": "../host-core"
     },
     {
@@ -29,6 +35,9 @@
     },
     {
       "path": "../protocol"
+    },
+    {
+      "path": "../scheduler"
     }
   ]
 }

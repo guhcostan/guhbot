@@ -1,0 +1,35 @@
+{
+  "name": "@guhbot/companion",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Network-facing sidecar: the only guhbot process that binds a network interface, fronting the loopback-only harness.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "guhbot-companion": "./dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b"
+  },
+  "dependencies": {
+    "@guhbot/protocol": "workspace:*",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@guhbot/host-core": "workspace:*",
+    "@guhbot/server": "workspace:*",
+    "@types/ws": "^8.5.13"
+  }
+}

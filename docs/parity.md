@@ -19,11 +19,11 @@ for a subscription should not need an API key.
 | Capability | Grok Bot | MausBot | guhbot |
 |---|---|---|---|
 | Own model loop, any OpenAI-compatible endpoint | ✅ | ✅ | ✅ |
-| Claude Code as an engine | — | ✅ | 🅿️ |
-| Codex as an engine | — | ✅ | 🅿️ |
-| OpenCode as an engine | — | ✅ | 🅿️ |
-| Agent Client Protocol (ACP) | — | ✅ | 🅿️ |
-| Engine probing: installed / version / blocked | — | ✅ | 🅿️ |
+| Claude Code as an engine | — | ✅ | ⚠️ driver built |
+| Codex as an engine | — | ✅ | ⚠️ driver built |
+| OpenCode as an engine | — | ✅ | ⚠️ driver built |
+| Agent Client Protocol (ACP) | — | ✅ | ⚠️ driver built |
+| Engine probing: installed / version / blocked | — | ✅ | ✅ |
 | Per-agent model choice | ✅ | ✅ | ✅ |
 | Cost reporting per run | ✅ | ✅ | ❌ |
 
@@ -78,8 +78,8 @@ for a subscription should not need an API key.
 
 | Capability | Grok Bot | MausBot | guhbot |
 |---|---|---|---|
-| Artifacts | ✅ | ✅ | 🅿️ |
-| Canvas: rendered HTML with a per-document CSP | ✅ | ✅ | 🅿️ |
+| Artifacts | ✅ | ✅ | ✅ |
+| Canvas: rendered HTML with a per-document CSP | ✅ | ✅ | ✅ |
 | Document rendering (PDF, XLSX, DOCX) | ✅ | ✅ | ❌ |
 | Live screen preview of the agent's computer | ✅ | ✅ | ❌ |
 | Remote desktop (VNC) | ✅ | ✅ | ❌ |
@@ -90,9 +90,9 @@ for a subscription should not need an API key.
 
 | Capability | Grok Bot | MausBot | guhbot |
 |---|---|---|---|
-| Scheduled automations | ✅ | ✅ | 🅿️ |
-| Webhook-triggered automations | ✅ | ✅ | 🅿️ |
-| Cron with correct DST and catch-up | ✅ | ✅ | 🅿️ |
+| Scheduled automations | ✅ | ✅ | ✅ |
+| Webhook-triggered automations | ✅ | ✅ | ✅ |
+| Cron with correct DST and catch-up | ✅ | ✅ | ✅ |
 | Teach once, replay as a routine | ✅ | ✅ | ⚠️ protocol only |
 | Always-on cloud box | ✅ | ✅ | ❌ |
 | Runs resume after a crash | ✅ | ✅ | ✅ (fail cleanly) |
@@ -103,7 +103,7 @@ for a subscription should not need an API key.
 |---|---|---|---|
 | Desktop app | ✅ | ✅ | ✅ |
 | Mobile app | ✅ | ✅ | ⚠️ unrun on device |
-| Reachable from a phone off your network | ✅ | ✅ | 🅿️ companion |
+| Reachable from a phone off your network | ✅ | ✅ | ⚠️ companion built, not yet wired into the CLI |
 | Pairing by code or QR | ✅ | ✅ | ✅ |
 | Signed, notarised installers | ✅ | ✅ | ❌ |
 | Docker deployment | — | ✅ | ❌ |
@@ -127,11 +127,16 @@ lands.
 
 ## What is left, in the order it should be done
 
-1. **Engines** — in progress. Without them, someone with a subscription still
-   cannot try this in one click.
+1. ~~**Engines**~~ — the drivers are built and tested, including the rate-limit
+   case that a naive driver reports as an empty success. What remains is mounting
+   them in the CLI so a user can pick one.
 2. **Routines** — the protocol methods exist and nothing implements them. "Show
    the bot how you do it once" is the single most-praised Grok Bot feature.
-3. **Sign-in on the user's behalf** — cookies, per-origin approval, WebAuthn.
+3. **Wire the companion into the CLI.** The package is built and tested, but
+   `guhbot-host` still tells the user to run a companion that nothing can hand a
+   token verifier to. The fix is a `devices.verify` RPC, or the host spawning the
+   companion in-process.
+4. **Sign-in on the user's behalf** — cookies, per-origin approval, WebAuthn.
    This is what makes an agent able to work in the tools you actually use, and it
    is the largest remaining gap.
 4. **Signed installers** — the difference between a project people star and one

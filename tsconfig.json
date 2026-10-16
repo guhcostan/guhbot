@@ -8,6 +8,15 @@
       "path": "packages/browser"
     },
     {
+      "path": "packages/canvas"
+    },
+    {
+      "path": "packages/companion"
+    },
+    {
+      "path": "packages/engine-cli"
+    },
+    {
       "path": "packages/host-core"
     },
     {
@@ -18,6 +27,9 @@
     },
     {
       "path": "packages/protocol"
+    },
+    {
+      "path": "packages/scheduler"
     }
   ]
 }

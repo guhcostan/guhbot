@@ -1,0 +1,28 @@
+{
+  "name": "@guhbot/engine-cli",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CLI agent engines: drive an installed Claude Code, Codex or OpenCode so a run needs no API key.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b"
+  },
+  "dependencies": {
+    "@guhbot/agent": "workspace:*",
+    "@guhbot/host-core": "workspace:*"
+  },
+  "devDependencies": {
+    "@guhbot/protocol": "workspace:*"
+  }
+}

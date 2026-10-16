@@ -1,0 +1,6 @@
+{"type":"thread.started","thread_id":"01a144f8-5d50-7ac0-b5ae-5c66718c46df"}
+{"type":"item.completed","item":{"id":"item_0","type":"error","message":"Under-development features enabled: chronicle. Under-development features are incomplete and may behave unpredictably."}}
+{"type":"item.completed","item":{"id":"item_1","type":"error","message":"Model metadata for `definitely-not-a-model` not found. Defaulting to fallback metadata; this can degrade performance and cause issues."}}
+{"type":"turn.started"}
+{"type":"error","message":"{\"type\":\"error\",\"status\":400,\"error\":{\"type\":\"invalid_request_error\",\"message\":\"The 'definitely-not-a-model' model is not supported when using Codex with a ChatGPT account.\"}}"}
+{"type":"turn.failed","error":{"message":"{\"type\":\"error\",\"status\":400,\"error\":{\"type\":\"invalid_request_error\",\"message\":\"The 'definitely-not-a-model' model is not supported when using Codex with a ChatGPT account.\"}}"}}

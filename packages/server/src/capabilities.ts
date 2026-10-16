@@ -1,8 +1,10 @@
 import { createBrowserCapability } from '@guhbot/browser';
+import { createCanvasCapability } from '@guhbot/canvas';
 import { createMcpCapability, type McpServerConfig } from '@guhbot/mcp';
 import { createMessagesCapability } from '@guhbot/messages';
+import { createSchedulerCapability } from '@guhbot/scheduler';
 import { collectContributions, prepareCapabilities, type Capability, type ToolDefinition } from '@guhbot/agent';
-import type { ContributedMethod } from '@guhbot/host-core';
+import type { ContributedMethod, Host } from '@guhbot/host-core';
 
 /**
  * Capability mounting.
@@ -30,6 +32,17 @@ export interface CapabilityMountConfig {
   browser?: { enabled?: boolean } | undefined;
   mcp?: { allowStdio?: boolean; servers?: McpServerConfig[] } | undefined;
   messages?: { allowed?: readonly string[]; databasePath?: string; platform?: NodeJS.Platform } | undefined;
+  canvas?: { enabled?: boolean } | undefined;
+  /**
+   * The scheduler needs a live `Host` to start runs on, but the host needs the
+   * capability's tools at construction. A getter resolves the cycle: the
+   * scheduler declares its tools immediately, and only touches the host from its
+   * first tick, which runs after construction.
+   *
+   * When omitted, no scheduler is mounted. That is the right default for a host
+   * whose automations table nothing is reading yet.
+   */
+  scheduler?: { host: () => Host; pollMs?: number } | undefined;
 }
 
 export interface MountedCapabilities {
@@ -93,6 +106,25 @@ export async function mountCapabilities(config: CapabilityMountConfig): Promise<
     } catch (error) {
       notes.push(`mcp capability rejected its configuration: ${error instanceof Error ? error.message : String(error)}`);
     }
+  }
+
+  // -- Canvas ---------------------------------------------------------------
+  if (config.canvas?.enabled !== false && config.canvas !== undefined) {
+    // The canvas sandbox is the point of the capability, so it is mounted
+    // unconditionally once asked for: its frames reach nothing unless a document
+    // declares a host that is already on the egress list. No egress list means
+    // every document is confined to `connect-src 'none'`, which is the safe case.
+    capabilities.push(createCanvasCapability({ dataDir: config.dataDir, allowedHosts }));
+  }
+
+  // -- Scheduler ------------------------------------------------------------
+  if (config.scheduler !== undefined) {
+    capabilities.push(
+      createSchedulerCapability({
+        host: config.scheduler.host,
+        ...(config.scheduler.pollMs !== undefined ? { pollMs: config.scheduler.pollMs } : {}),
+      }),
+    );
   }
 
   // -- macOS Messages -------------------------------------------------------
