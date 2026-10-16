@@ -9,7 +9,7 @@ your files, your shell and your browser — and every operation they can perform
 classified by whether it needs a human present.
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-67e8a2?style=flat-square)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-386%20passing-67e8a2?style=flat-square)](#testing)
+[![Tests](https://img.shields.io/badge/tests-385%20passing-67e8a2?style=flat-square)](#testing)
 [![Node](https://img.shields.io/badge/node-%E2%89%A522.5-339933?style=flat-square&logo=nodedotjs&logoColor=white)](#quick-start)
 
 [Website](https://d1490grrgfw1sj.cloudfront.net) · [Security](SECURITY.md) · [Architecture](docs/architecture.md) · [Reverse-engineering dossier](docs/re/00-index.md)
@@ -188,8 +188,13 @@ stored unencrypted, and there is no cost budget per agent.
 pnpm test
 ```
 
-**386 tests** across 24 files, concentrating on properties that would be dangerous
-to get wrong rather than on coverage.
+**385 tests** across 22 files, concentrating on properties that would be dangerous
+to get wrong rather than on coverage. Four more run against a live model when
+credentials are present.
+
+The suite is deterministic on purpose. Anything that needs the network lives in a
+`*.live.test.ts` file and is excluded from the default run, because a provider
+that is slow or declines to call a tool is not a signal about this code.
 
 `pnpm test` builds first. Tests resolve workspace packages through their built
 `dist`, so running vitest alone can silently test stale code.
