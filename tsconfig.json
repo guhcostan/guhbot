@@ -14,6 +14,9 @@
       "path": "packages/companion"
     },
     {
+      "path": "packages/credentials"
+    },
+    {
       "path": "packages/engine-cli"
     },
     {
@@ -21,6 +24,9 @@
     },
     {
       "path": "packages/mcp"
+    },
+    {
+      "path": "packages/memory"
     },
     {
       "path": "packages/messages"

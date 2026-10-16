@@ -4,7 +4,7 @@
  *
  * Usage:
  *   guhbot-host                       # loopback only, no model configured
- *   guhbot-host --lan                 # reachable from your phone on the LAN
+ *   guhbot-host --companion           # also bind a socket paired devices can reach
  *   guhbot-host --base-url https://api.openai.com/v1 --model gpt-4o-mini
  *
  * Configuration is flags plus environment. There is no config file: the host is
@@ -250,6 +250,11 @@ async function main(): Promise<void> {
     // "works while you sleep" is the point of a host you leave running.
     canvas: { enabled: true },
     scheduler: { host: hostGetter },
+    // Memory writes only inside this host's own store, and credentials reach
+    // nothing until a human puts a value in. Both are on by default so a fresh
+    // host has them; neither opens a socket or spends anything.
+    memory: { host: hostGetter },
+    credentials: { host: hostGetter },
   });
   // The browser shares the egress list with http_fetch, so a host that allows
   // one allows the other; `--allowed-hosts` alone is enough for both.
@@ -293,6 +298,8 @@ async function main(): Promise<void> {
       voice: false,
       messages: false,
       vnc: false,
+      memory: false,
+      credentials: false,
       egress: egressHosts.length > 0,
       ...mounted.flags,
     },

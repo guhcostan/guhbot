@@ -200,6 +200,21 @@ importers:
         specifier: ^8.5.13
         version: 8.18.2
 
+  packages/credentials:
+    dependencies:
+      '@guhbot/agent':
+        specifier: workspace:*
+        version: link:../agent
+      '@guhbot/host-core':
+        specifier: workspace:*
+        version: link:../host-core
+      '@guhbot/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+
   packages/engine-cli:
     dependencies:
       '@guhbot/agent':
@@ -223,6 +238,21 @@ importers:
         version: 3.25.76
 
   packages/mcp:
+    dependencies:
+      '@guhbot/agent':
+        specifier: workspace:*
+        version: link:../agent
+      '@guhbot/host-core':
+        specifier: workspace:*
+        version: link:../host-core
+      '@guhbot/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+
+  packages/memory:
     dependencies:
       '@guhbot/agent':
         specifier: workspace:*
@@ -284,6 +314,9 @@ importers:
       '@guhbot/companion':
         specifier: workspace:*
         version: link:../companion
+      '@guhbot/credentials':
+        specifier: workspace:*
+        version: link:../credentials
       '@guhbot/engine-cli':
         specifier: workspace:*
         version: link:../engine-cli
@@ -293,6 +326,9 @@ importers:
       '@guhbot/mcp':
         specifier: workspace:*
         version: link:../mcp
+      '@guhbot/memory':
+        specifier: workspace:*
+        version: link:../memory
       '@guhbot/messages':
         specifier: workspace:*
         version: link:../messages

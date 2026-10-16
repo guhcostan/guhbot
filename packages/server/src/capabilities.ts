@@ -1,6 +1,8 @@
 import { createBrowserCapability } from '@guhbot/browser';
 import { createCanvasCapability } from '@guhbot/canvas';
+import { createCredentialsCapability } from '@guhbot/credentials';
 import { createMcpCapability, type McpServerConfig } from '@guhbot/mcp';
+import { createMemoryCapability } from '@guhbot/memory';
 import { createMessagesCapability } from '@guhbot/messages';
 import { createSchedulerCapability } from '@guhbot/scheduler';
 import { collectContributions, prepareCapabilities, type Capability, type ToolDefinition } from '@guhbot/agent';
@@ -43,6 +45,24 @@ export interface CapabilityMountConfig {
    * whose automations table nothing is reading yet.
    */
   scheduler?: { host: () => Host; pollMs?: number } | undefined;
+  /**
+   * Agent memory: short facts an agent writes down and recalls on a later run.
+   *
+   * On by default, for the same reason the canvas is: it writes only inside this
+   * host's own store, is capped, and every fact is readable and deletable by the
+   * human. `agentId` pins the capability to one agent, which is what removes the
+   * "which agent is calling?" ambiguity; a host running several agents should set
+   * it, or the tools refuse rather than guess whose memory to touch.
+   */
+  memory?: { enabled?: boolean; host: () => Host; agentId?: string } | undefined;
+  /**
+   * Per-origin credentials for sites the agent signs in to.
+   *
+   * Mounted whenever asked for. It reaches nothing on its own: a value only ever
+   * enters because a human put it there, and it only ever leaves through an
+   * approval that a `person`-class device resolved.
+   */
+  credentials?: { enabled?: boolean; host: () => Host } | undefined;
 }
 
 export interface MountedCapabilities {
@@ -125,6 +145,25 @@ export async function mountCapabilities(config: CapabilityMountConfig): Promise<
         ...(config.scheduler.pollMs !== undefined ? { pollMs: config.scheduler.pollMs } : {}),
       }),
     );
+  }
+
+  // -- Memory ---------------------------------------------------------------
+  const memoryConfig = config.memory;
+  if (memoryConfig !== undefined && memoryConfig.enabled !== false) {
+    // Late-bound like the scheduler's: the store lives on a host that does not
+    // exist yet when this capability declares its tools and methods.
+    capabilities.push(
+      createMemoryCapability({
+        store: () => memoryConfig.host().store,
+        ...(memoryConfig.agentId !== undefined ? { agentId: memoryConfig.agentId } : {}),
+      }),
+    );
+  }
+
+  // -- Credentials ----------------------------------------------------------
+  const credentialsConfig = config.credentials;
+  if (credentialsConfig !== undefined && credentialsConfig.enabled !== false) {
+    capabilities.push(createCredentialsCapability({ host: credentialsConfig.host }));
   }
 
   // -- macOS Messages -------------------------------------------------------

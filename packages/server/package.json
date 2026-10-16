@@ -39,7 +39,9 @@
     "@guhbot/canvas": "workspace:*",
     "@guhbot/scheduler": "workspace:*",
     "@guhbot/engine-cli": "workspace:*",
-    "@guhbot/companion": "workspace:*"
+    "@guhbot/companion": "workspace:*",
+    "@guhbot/memory": "workspace:*",
+    "@guhbot/credentials": "workspace:*"
   },
   "devDependencies": {
     "@types/ws": "^8.5.13"

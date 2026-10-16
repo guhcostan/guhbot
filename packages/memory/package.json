@@ -1,0 +1,27 @@
+{
+  "name": "@guhbot/memory",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Agent memory capability: a small, durable, agent-scoped store of facts an agent decided were worth keeping, plus ranked recall.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b"
+  },
+  "dependencies": {
+    "@guhbot/agent": "workspace:*",
+    "@guhbot/host-core": "workspace:*",
+    "@guhbot/protocol": "workspace:*",
+    "zod": "^3.24.1"
+  }
+}
