@@ -1,0 +1,15 @@
+# Reverse-engineering workspace: contains extracted proprietary artifacts.
+# NEVER commit or redistribute. Clean-room reimplementation only.
+recon/
+
+node_modules/
+dist/
+out/
+build/
+*.tsbuildinfo
+.DS_Store
+.env
+.env.*
+!.env.example
+coverage/
+*.log
