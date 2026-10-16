@@ -33,7 +33,10 @@ Rules that keep this honest:
    client, the browser console and the host. If it ever gains a Node-specific
    import, the mobile bundle breaks.
 2. **Only `@guhbot/server` binds a socket.** A package that wants to be reachable
-   exposes a tool or an RPC method, never its own listener.
+   exposes a tool or an RPC method, never its own listener. The companion
+   network transport (`@guhbot/companion`) is part of the server's own
+   dependency closure and only listens when the operator passes `--companion`;
+   a capability package must never depend on it.
 3. **`@guhbot/host-core` owns every durable write.** Nothing else opens the
    database. If a feature needs new state, it gets a table and a method in
    `store.ts`.

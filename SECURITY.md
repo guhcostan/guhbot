@@ -64,7 +64,18 @@ If you are here to loosen one of these, please open an issue first.
 - **A remote device cannot promote itself to `person`.** `claimPairing`
   downgrades rather than honours the request. The only ways to become `person`
   are to run code on the host or to be handed a code by a device that already is.
-- **Loopback is the default bind.** `--lan` is opt-in and prints a warning.
+- **Loopback is the default bind, and the only one the runtime makes.** Exposing
+  this host to a network is a separate socket with a separate process boundary:
+  `--companion` binds it, and a non-loopback companion refuses to start in
+  plaintext unless `--companion-insecure-plaintext` says you mean it. Requests to
+  the harness must arrive with a loopback `Host` header, which is what stops DNS
+  rebinding through a browser.
+- **A credential value never crosses the wire.** `packages/credentials` stores one
+  approval per canonical origin, sealed with the same box as every other secret,
+  and the only way a value leaves is `release(origin)` from inside a tool
+  execution. No method or tool returns a credential, and the matcher is exact
+  scheme + host + port on canonicalised origins — no suffix or substring logic,
+  and `http://` is refused outright.
 - **Egress defaults to deny-all.** Empty allow list means no network at all. An
   agent that can fetch any URL can exfiltrate anything it can read.
 - **MCP over stdio requires an explicit `allowStdio` opt-in.** Registering a

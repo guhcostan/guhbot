@@ -172,9 +172,12 @@ with backoff, and resync rather than replay.
 
 ### Binding
 
-Loopback by default. `--lan` is an explicit opt-in, because exposing an agent
-that runs commands on your machine to your local network is a decision that
-should require typing a flag. The host prints a warning when it is on.
+Loopback by default, and there is no flag that widens that bind. Exposing an
+agent that runs commands on your machine to your local network is a decision that
+gets its own socket rather than a wider one: `--companion` starts a second
+listener for paired devices, and the harness itself never opens one. Pairing
+always joins as `background`, and a non-loopback companion refuses to start in
+plaintext unless you pass `--companion-insecure-plaintext`.
 
 ## Self-hosted and hosted from one codebase
 

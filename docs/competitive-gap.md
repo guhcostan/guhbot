@@ -28,7 +28,11 @@ worth leading with.
 
 ## Where we are behind — ordered by how much it matters
 
-### 1. We only have one kind of engine. They have a driver layer. (critical)
+Sections marked **closed** are kept with their original reasoning, because the
+reasoning is what justified the work and the next person should be able to check
+whether the fix actually answered it.
+
+### 1. We only have one kind of engine. They have a driver layer. — **closed**
 
 `server/drivers/` in OpenMausBot holds: `acp/` (Agent Client Protocol, which is
 how Zed and others drive coding agents), `codex-process.ts`,
@@ -36,21 +40,31 @@ how Zed and others drive coding agents), `codex-process.ts`,
 `native.ts`. Their headline is "bring your own agent": every bot in the sidebar
 is Claude Code or Codex running locally under the hood.
 
-We have exactly one engine: our own `AgentLoop` talking to an OpenAI-compatible
+We had exactly one engine: our own `AgentLoop` talking to an OpenAI-compatible
 endpoint.
 
-**Why this is the biggest gap.** It is an adoption problem, not a feature gap.
+**Why this was the biggest gap.** It is an adoption problem, not a feature gap.
 Requiring a model API key excludes everyone who already pays for a Claude Code or
 Codex subscription — which is most of the audience for this category. They can
 start in one click; our users have to go and get a key first.
 
-**What "better" would look like.** An engine abstraction with two families:
-our own loop (already built, and it is the portable, provider-agnostic one) and
-**CLI/ACP engines** that wrap an installed agent CLI. That would let someone with
-a Claude Code subscription have a working bot in seconds, and would make the
-"bring your own agent" story true for us too.
+**What we built.** `packages/engine-cli` is an `Engine` seam — `probe()` decides
+whether an engine is usable here, `createExecutor()` produces a `RunExecutor` —
+with one driver per installed agent CLI. `--list-engines` reports what a host can
+actually drive rather than what the code nominally supports, and `--engine <id>`
+selects one; the OpenAI-compatible loop stays the portable, provider-agnostic
+default. Verified on this machine:
 
-### 2. Our network exposure lives inside the runtime. Theirs does not. (important)
+```
+claude-code    ready (2.1.293 (Claude Code))
+codex          ready (codex-cli 0.162.1)
+opencode       ready (opencode v2.0.25)
+```
+
+A Claude Code or Codex subscriber now has a working bot with no API key, which
+was the whole point of the section above.
+
+### 2. Our network exposure lives inside the runtime. Theirs does not. — **closed**
 
 The OpenMausBot companion README states the design explicitly: the harness listens
 on `127.0.0.1` **and nothing else**, rejects any request whose `Host` is not

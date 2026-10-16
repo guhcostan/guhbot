@@ -9,7 +9,7 @@ your files, your shell and your browser — and every operation they can perform
 classified by whether it needs a human present.
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-67e8a2?style=flat-square)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-671%20passing-67e8a2?style=flat-square)](#testing)
+[![Tests](https://img.shields.io/badge/tests-841%20passing-67e8a2?style=flat-square)](#testing)
 [![Node](https://img.shields.io/badge/node-%E2%89%A522.5-339933?style=flat-square&logo=nodedotjs&logoColor=white)](#quick-start)
 
 [Website](https://d1490grrgfw1sj.cloudfront.net) · [Security](SECURITY.md) · [Architecture](docs/architecture.md) · [Reverse-engineering dossier](docs/re/00-index.md)
@@ -69,6 +69,8 @@ Nothing reaches the network unless you configured what it may reach.
 | Desktop app | ✅ | Electron shell with an embedded host, hardened window, no remote script |
 | Canvas | ✅ | Model-authored HTML, content-addressed, own CSP, frame with no same-origin access |
 | Automations | ✅ | Cron with DST handled, webhooks with sealed revocable secrets, coalesced catch-up |
+| Agent memory | ✅ | Short facts an agent writes down and recalls later. Per-agent, capped, ranked by use, and readable and deletable by the human |
+| Site credentials | ⚠️ | Per-origin approval, sealed at rest, released only from inside a tool execution. The vault is mounted and tested; the browser does not consume it yet |
 | Reachable from a phone | ✅ | `--companion` binds the network; the runtime itself never opens a socket |
 | Mobile app | ⚠️ | Complete and typechecked; the React Native bundle has not been run on a device |
 | Voice | ❌ | Not built |
@@ -94,12 +96,13 @@ Run a host on this machine only:
 node packages/server/dist/cli.js --data-dir ~/.guhbot
 ```
 
-Run one your phone can reach, with a model:
+Run one your phone can reach, with a model. The host itself stays on loopback;
+`--companion` adds a second, separate socket for paired devices:
 
 ```bash
 export GUHBOT_API_KEY=sk-...
 node packages/server/dist/cli.js \
-  --lan \
+  --companion \
   --workspace ~/work \
   --base-url https://api.openai.com/v1 \
   --model gpt-4o-mini
@@ -112,8 +115,13 @@ require a per-request session id.
 The first start writes an operator token to `<data-dir>/operator.token` with mode
 `0600`. That is the terminal's `person`-class credential; without it a host on
 your own machine could only be observed, never driven. Press Enter on the console
-to mint a pairing code for a phone, or restart with `--lan` and scan the printed
-`guhbot://pair?…` URI.
+to mint a pairing code for a phone, or start with `--companion` and scan the
+printed `guhbot://pair?…` URI.
+
+The companion binds a network socket, so it refuses to start in plaintext on a
+non-loopback address unless you pass `--companion-insecure-plaintext` and mean
+it. Pairing always joins as `background`: a phone can watch and ask, and cannot
+act outward.
 
 ### Mounting capabilities
 
@@ -191,7 +199,7 @@ stored unencrypted, and there is no cost budget per agent.
 pnpm test
 ```
 
-**671 tests** across 45 files, concentrating on properties that would be dangerous
+**841 tests** across 55 files, concentrating on properties that would be dangerous
 to get wrong rather than on coverage. Four more run against a live model when
 credentials are present.
 

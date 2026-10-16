@@ -38,7 +38,7 @@ for a subscription should not need an API key.
 | Many agents in one thread, passing work | ✅ | ✅ | ⚠️ protocol only |
 | Transcript with resync after a disconnect | ✅ | ✅ | ✅ |
 | Subagents / async tasks | ✅ | ✅ | ❌ |
-| Memory that persists and improves across runs | ✅ | ✅ | ❌ |
+| Memory that persists and improves across runs | ✅ | ✅ | ✅ facts persist; no self-editing of the agent's own instructions |
 
 ## Local execution
 
@@ -137,19 +137,25 @@ lands.
    `--companion-insecure-plaintext` is required to acknowledge what that means.
    A second process would have needed an RPC that hands one process another's
    authentication decision, or a second opener of `data.db`.
-4. **Sign-in on the user's behalf** — cookies, per-origin approval, WebAuthn.
-   This is what makes an agent able to work in the tools you actually use, and it
-   is the largest remaining gap.
-4. **Signed installers** — the difference between a project people star and one
+4. **Sign-in on the user's behalf** — the largest remaining gap. The vault half
+   is done: `packages/credentials` holds one approval per canonical origin, sealed
+   at rest in host-core's secret box, released only from inside a tool execution
+   and never returned by any method. What is missing is the consumer — the browser
+   must take an `OriginCredentialProvider` and call `release(origin)`, so nothing
+   actually signs in yet. Cookies, WebAuthn and session handling are untouched.
+5. **Signed installers** — the difference between a project people star and one
    they use. Needs a certificate, not just code.
-5. **Computer use and the live screen** — click, type, screenshot, watch.
-6. **Voice** — calls and transcription.
-7. **MCP apps and serving MCP.**
-8. **Connected apps** — Gmail, Slack, GitHub, Notion. Composio is one route;
+6. **Computer use and the live screen** — click, type, screenshot, watch.
+7. **Voice** — calls and transcription.
+8. **MCP apps and serving MCP.**
+9. **Connected apps** — Gmail, Slack, GitHub, Notion. Composio is one route;
    direct integrations are another.
-9. **Memory** — agents that get better instead of starting cold.
-10. **Evals** — measure whether the agent is any good, not only whether the code
+10. ~~**Memory**~~ — done. `packages/memory` gives each agent capped, ranked facts
+    it writes with `memory_remember` and recalls with `memory_recall`; the human
+    reads and deletes them from a client. An agent cannot label a fact as
+    user-stated, which is the only source that can retire other facts.
+11. **Evals** — measure whether the agent is any good, not only whether the code
     is correct.
-11. **Docker and a hosted deployment for 24/7** — the part AWS is for.
-12. **VNC / remote desktop.**
-13. **Document rendering** — PDF, XLSX, DOCX.
+12. **Docker and a hosted deployment for 24/7** — the part AWS is for.
+13. **VNC / remote desktop.**
+14. **Document rendering** — PDF, XLSX, DOCX.
