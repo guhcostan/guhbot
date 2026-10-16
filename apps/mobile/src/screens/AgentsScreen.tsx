@@ -4,6 +4,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useState, type ReactElement } from 'react';
 import { ActivityIndicator, Alert, FlatList, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { Avatar, EmptyState } from '../components/Avatar.js';
 import { ConnectionBanner } from '../components/ConnectionBanner.js';
 import { NoticeCard } from '../components/NoticeCard.js';
 import { Pill, type PillTone } from '../components/Pill.js';
@@ -12,7 +13,7 @@ import { capabilityFor } from '../core/capabilities.js';
 import { ageLabel } from '../core/format.js';
 import type { RootStackParamList } from '../navigation/types.js';
 import { useAppState, useAppStore } from '../state/provider.js';
-import { colors, radius, spacing } from '../theme.js';
+import { colors, fontSize, radius, spacing } from '../theme.js';
 
 const STATUS_TONE: Readonly<Record<Agent['status'], PillTone>> = { active: 'good', paused: 'warn', archived: 'neutral' };
 
@@ -27,6 +28,12 @@ export function AgentsScreen(): ReactElement {
 
   const header = (
     <View>
+      <View style={styles.hero}>
+        <Text style={styles.heroTitle}>Your agents</Text>
+        <Text style={styles.heroSub}>
+          {state.agents.length === 0 ? 'Nothing running yet.' : `${state.agents.length} ${state.agents.length === 1 ? 'agent' : 'agents'} on this host.`}
+        </Text>
+      </View>
       <ConnectionBanner view={state.connection} onRetry={() => void app.reconnect()} />
       {state.problem === null ? null : (
         <NoticeCard
@@ -38,13 +45,13 @@ export function AgentsScreen(): ReactElement {
       )}
 
       {canCreate.allowed ? (
-        <View style={styles.createBlock}>
+        <View style={styles.createCard}>
           <Text style={styles.label}>New agent</Text>
           <View style={styles.createRow}>
             <TextInput
               autoCapitalize="sentences"
-              placeholder="Name"
-              placeholderTextColor={colors.muted}
+              placeholder="Name it…"
+              placeholderTextColor={colors.faint}
               style={[styles.input, styles.grow]}
               value={draftName}
               onChangeText={setDraftName}
@@ -63,7 +70,7 @@ export function AgentsScreen(): ReactElement {
                 state.creatingAgent || draftName.trim().length === 0 ? styles.disabled : null,
               ]}
             >
-              {state.creatingAgent ? <ActivityIndicator color={colors.background} /> : <Text style={styles.createText}>Create</Text>}
+              {state.creatingAgent ? <ActivityIndicator color={colors.accentInk} /> : <Text style={styles.createText}>+ Create</Text>}
             </Pressable>
           </View>
         </View>
@@ -101,15 +108,14 @@ export function AgentsScreen(): ReactElement {
               <Text style={styles.muted}>Loading agents from the host…</Text>
             </View>
           ) : (
-            <NoticeCard
-              tone={state.connection.state === 'unreachable' ? 'bad' : 'info'}
+            <EmptyState
+              mark="✦"
               title={state.connection.state === 'unreachable' ? 'No agents to show' : 'No agents yet'}
               detail={
                 state.connection.state === 'unreachable'
-                  ? 'The host has not answered, so this list is empty rather than confirmed empty. Bring the host back and pull to refresh.'
-                  : 'This host has no agents. Create one on the host machine; a phone that paired over the network cannot create agents itself.'
+                  ? 'The host has not answered, so this list is empty rather than confirmed empty.'
+                  : 'Create one on the host machine; a phone that paired over the network cannot create agents itself.'
               }
-              {...(state.connection.state === 'unreachable' ? { action: { label: 'Try again', onPress: () => void app.refresh() } } : {})}
             />
           )
         }
@@ -120,19 +126,26 @@ export function AgentsScreen(): ReactElement {
             onPress={() => navigation.navigate('Thread', { agentId: item.id, agentName: item.name })}
             style={({ pressed }) => [styles.row, pressed ? styles.pressed : null]}
           >
-            <View style={styles.rowHeader}>
-              <Text style={styles.name}>{item.name}</Text>
-              {item.unreadCount > 0 ? (
-                <View style={styles.badge}>
-                  <Text style={styles.badgeText}>{item.unreadCount > 99 ? '99+' : String(item.unreadCount)}</Text>
-                </View>
-              ) : null}
+            <Avatar name={item.name} size={42} />
+            <View style={styles.rowBody}>
+              <View style={styles.rowHeader}>
+                <Text style={styles.name} numberOfLines={1}>
+                  {item.name}
+                </Text>
+                {item.unreadCount > 0 ? (
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>{item.unreadCount > 99 ? '99+' : String(item.unreadCount)}</Text>
+                  </View>
+                ) : null}
+              </View>
+              <View style={styles.rowMeta}>
+                <Pill label={item.status} tone={STATUS_TONE[item.status]} />
+                <Text style={styles.muted} numberOfLines={1}>
+                  {item.model ?? 'host default'} · {ageLabel(item.updatedAt, Date.now())}
+                </Text>
+              </View>
             </View>
-            <View style={styles.rowMeta}>
-              <Pill label={item.status} tone={STATUS_TONE[item.status]} />
-              <Text style={styles.muted}>{item.model ?? 'host default model'}</Text>
-              <Text style={styles.muted}>{ageLabel(item.updatedAt, Date.now())}</Text>
-            </View>
+            <Text style={styles.chevron}>›</Text>
           </Pressable>
         )}
       />
@@ -141,29 +154,43 @@ export function AgentsScreen(): ReactElement {
 }
 
 const styles = StyleSheet.create({
-  content: { padding: spacing.lg, paddingBottom: spacing.xl * 2 },
+  content: { padding: spacing.lg, paddingBottom: spacing.xxl * 2 },
+  hero: { marginBottom: spacing.md, marginTop: spacing.sm },
+  heroTitle: { color: colors.text, fontSize: fontSize.hero, fontWeight: '800', letterSpacing: -0.4 },
+  heroSub: { color: colors.muted, fontSize: fontSize.secondary, marginTop: 2 },
   loadingRow: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm, paddingVertical: spacing.lg },
-  muted: { color: colors.muted, fontSize: 13 },
-  name: { color: colors.text, flexShrink: 1, fontSize: 16, fontWeight: '600' },
+  muted: { color: colors.muted, fontSize: 12.5, flexShrink: 1 },
   row: {
+    alignItems: 'center',
     backgroundColor: colors.surface,
-    borderColor: colors.border,
+    borderColor: colors.borderSoft,
     borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
-    gap: spacing.sm,
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginBottom: spacing.sm,
+    padding: spacing.md,
+  },
+  rowBody: { flex: 1, gap: 6, minWidth: 0 },
+  rowHeader: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm },
+  name: { color: colors.text, flexShrink: 1, fontSize: 15.5, fontWeight: '700' },
+  rowMeta: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm },
+  badge: { backgroundColor: colors.accent, borderRadius: 10, paddingHorizontal: spacing.sm, paddingVertical: 1 },
+  badgeText: { color: colors.accentInk, fontSize: 11, fontWeight: '800' },
+  chevron: { color: colors.faint, fontSize: 20, fontWeight: '400' },
+  label: { color: colors.muted, fontSize: fontSize.eyebrow, fontWeight: '700', marginBottom: spacing.xs, textTransform: 'uppercase' },
+  createCard: {
+    backgroundColor: colors.surface,
+    borderColor: colors.borderSoft,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
     marginBottom: spacing.md,
     padding: spacing.md,
   },
-  rowHeader: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm, justifyContent: 'space-between' },
-  rowMeta: { alignItems: 'center', flexDirection: 'row', gap: spacing.md },
-  badge: { backgroundColor: colors.accent, borderRadius: 10, paddingHorizontal: spacing.sm, paddingVertical: 1 },
-  badgeText: { color: colors.background, fontSize: 11, fontWeight: '700' },
-  label: { color: colors.muted, fontSize: 12, fontWeight: '600', marginBottom: spacing.xs, textTransform: 'uppercase' },
-  createBlock: { marginBottom: spacing.md },
   createRow: { flexDirection: 'row', gap: spacing.sm },
   grow: { flex: 1 },
   input: {
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceAlt,
     borderColor: colors.border,
     borderRadius: radius.sm,
     borderWidth: StyleSheet.hairlineWidth,
@@ -172,8 +199,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
   },
-  createButton: { alignItems: 'center', backgroundColor: colors.accent, borderRadius: radius.sm, justifyContent: 'center', paddingHorizontal: spacing.lg },
-  createText: { color: colors.background, fontSize: 15, fontWeight: '700' },
+  createButton: {
+    alignItems: 'center',
+    backgroundColor: colors.accent,
+    borderRadius: radius.sm,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.lg,
+  },
+  createText: { color: colors.accentInk, fontSize: 14.5, fontWeight: '800' },
   pressed: { opacity: 0.6 },
-  disabled: { opacity: 0.5 },
+  disabled: { opacity: 0.45 },
 });

@@ -1,16 +1,17 @@
 import type { Entry } from '@guhbot/protocol';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useEffect, useRef, type ReactElement } from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { EmptyState } from '../components/Avatar.js';
 import { ConnectionBanner } from '../components/ConnectionBanner.js';
 import { NoticeCard } from '../components/NoticeCard.js';
 import { Screen } from '../components/Screen.js';
-import { clampText, shortTime } from '../core/format.js';
+import { shortTime } from '../core/format.js';
 import { isPending, type TranscriptItem } from '../core/transcript.js';
 import type { RootStackParamList } from '../navigation/types.js';
 import { useAppState, useAppStore, useTranscriptState, useTranscriptStore } from '../state/provider.js';
-import { colors, radius, spacing } from '../theme.js';
+import { colors, fontSize, radius, spacing } from '../theme.js';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Thread'>;
 
@@ -67,7 +68,7 @@ export function ThreadScreen({ route }: Props): ReactElement {
                 {transcript.loadingOlder ? (
                   <ActivityIndicator color={colors.muted} />
                 ) : (
-                  <Text style={styles.loadOlderText}>Load earlier messages</Text>
+                  <Text style={styles.loadOlderText}>↑ Load earlier messages</Text>
                 )}
               </Pressable>
             ) : null}
@@ -87,7 +88,7 @@ export function ThreadScreen({ route }: Props): ReactElement {
               action={{ label: 'Retry', onPress: () => void store.open(agentId) }}
             />
           ) : (
-            <NoticeCard title="Nothing here yet" detail="This agent has no transcript entries. Send it something from the host to start." />
+            <EmptyState mark="✦" title="Nothing here yet" detail="This agent has no transcript entries. Send it something from the host to start." />
           )
         }
         renderItem={({ item }) => <TranscriptRow item={item} />}
@@ -98,38 +99,53 @@ export function ThreadScreen({ route }: Props): ReactElement {
 
 function TranscriptRow({ item }: { readonly item: TranscriptItem }): ReactElement {
   if (isPending(item)) {
-    return <Bubble align="left" label="agent · streaming" body={`${item.text}▍`} />;
+    return (
+      <View style={styles.rowLeft}>
+        <View style={[styles.bubble, styles.agentBubble]}>
+          <Text style={styles.agentMark}>✦ agent · streaming</Text>
+          <Text style={styles.agentBody}>
+            {item.text}
+            <Text style={styles.cursor}>▍</Text>
+          </Text>
+        </View>
+      </View>
+    );
   }
   const entry: Entry = item.entry;
-  const label = entry.toolName === null ? `${entry.role} · ${entry.kind}` : `${entry.role} · ${entry.kind} · ${entry.toolName}`;
-  const align = entry.role === 'user' ? 'right' : 'left';
-  const tone = entry.kind === 'error' ? styles.errorBubble : entry.role === 'user' ? styles.userBubble : null;
-  return <Bubble align={align} label={`${label} · ${shortTime(entry.createdAt)}`} body={clampText(entry.content)} tone={tone} />;
-}
-
-function Bubble({
-  align,
-  label,
-  body,
-  tone,
-}: {
-  readonly align: 'left' | 'right';
-  readonly label: string;
-  readonly body: string;
-  readonly tone?: StyleProp<ViewStyle> | null;
-}): ReactElement {
+  if (entry.kind === 'tool-call' || entry.kind === 'tool-result') {
+    return (
+      <View style={[styles.tool, entry.kind === 'tool-result' ? styles.toolResult : null]}>
+        <Text style={styles.toolHead}>
+          {entry.kind === 'tool-call' ? '→' : '←'} {entry.toolName ?? 'tool'}
+        </Text>
+        <Text style={styles.toolBody} numberOfLines={8}>
+          {entry.content}
+        </Text>
+      </View>
+    );
+  }
+  const isUser = entry.role === 'user';
+  const isSystem = entry.role === 'system';
+  if (isSystem) {
+    return (
+      <View style={styles.system}>
+        <Text style={styles.systemText}>{entry.content}</Text>
+      </View>
+    );
+  }
   return (
-    <View style={[styles.bubbleRow, align === 'right' ? styles.alignRight : null]}>
-      <View style={[styles.bubble, tone ?? null]}>
-        <Text style={styles.bubbleLabel}>{label}</Text>
-        <Text style={styles.bubbleBody}>{body}</Text>
+    <View style={isUser ? styles.rowRight : styles.rowLeft}>
+      <View style={[styles.bubble, isUser ? styles.userBubble : styles.agentBubble]}>
+        {!isUser ? <Text style={styles.agentMark}>✦ agent · {shortTime(entry.createdAt)}</Text> : null}
+        <Text style={isUser ? styles.userBody : styles.agentBody}>{entry.content}</Text>
+        {isUser ? <Text style={styles.userMeta}>{shortTime(entry.createdAt)}</Text> : null}
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  content: { padding: spacing.lg, paddingBottom: spacing.xl * 2 },
+  content: { padding: spacing.lg, paddingBottom: spacing.xxl * 2 },
   muted: { color: colors.muted, fontSize: 13 },
   loadingRow: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm, paddingVertical: spacing.lg },
   loadOlder: {
@@ -141,20 +157,40 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     paddingVertical: spacing.sm,
   },
-  loadOlderText: { color: colors.text, fontSize: 13, fontWeight: '600' },
+  loadOlderText: { color: colors.text, fontSize: 13, fontWeight: '700' },
   pressed: { opacity: 0.6 },
-  bubbleRow: { alignItems: 'flex-start', marginBottom: spacing.md },
-  alignRight: { alignItems: 'flex-end' },
-  bubble: {
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    maxWidth: '92%',
-    padding: spacing.md,
-  },
-  userBubble: { backgroundColor: colors.surfaceAlt, borderColor: colors.accent },
+  rowLeft: { alignItems: 'flex-start', marginBottom: spacing.md },
+  rowRight: { alignItems: 'flex-end', marginBottom: spacing.md },
+  bubble: { borderRadius: radius.md, borderWidth: StyleSheet.hairlineWidth, maxWidth: '88%', padding: spacing.md },
+  userBubble: { backgroundColor: '#1b2634', borderColor: '#2a3a4e', borderBottomRightRadius: 5 },
+  agentBubble: { backgroundColor: colors.surface, borderColor: colors.borderSoft, borderBottomLeftRadius: 5 },
   errorBubble: { borderColor: colors.bad },
-  bubbleLabel: { color: colors.muted, fontSize: 11, marginBottom: spacing.xs, textTransform: 'uppercase' },
-  bubbleBody: { color: colors.text, fontSize: 14, lineHeight: 20 },
+  agentMark: { color: colors.accent, fontSize: fontSize.meta, fontWeight: '700', marginBottom: spacing.xs },
+  agentBody: { color: colors.text, fontSize: fontSize.body, lineHeight: 21 },
+  userBody: { color: '#e8eef5', fontSize: fontSize.body, lineHeight: 21 },
+  userMeta: { color: colors.faint, fontSize: fontSize.meta, marginTop: spacing.xs, textAlign: 'right' },
+  cursor: { color: colors.accent, fontWeight: '800' },
+  tool: {
+    backgroundColor: '#0c1015',
+    borderColor: colors.borderSoft,
+    borderRadius: radius.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginBottom: spacing.md,
+    padding: spacing.sm,
+  },
+  toolResult: { borderStyle: 'dashed' },
+  toolHead: { color: '#8fa0ae', fontFamily: 'monospace', fontSize: 12, fontWeight: '700', marginBottom: 4 },
+  toolBody: { color: colors.muted, fontFamily: 'monospace', fontSize: 12, lineHeight: 17 },
+  system: {
+    alignSelf: 'center',
+    backgroundColor: 'transparent',
+    borderColor: colors.border,
+    borderRadius: radius.sm,
+    borderStyle: 'dashed',
+    borderWidth: StyleSheet.hairlineWidth,
+    marginBottom: spacing.md,
+    maxWidth: '100%',
+    padding: spacing.sm,
+  },
+  systemText: { color: colors.faint, fontSize: 12, textAlign: 'center' },
 });

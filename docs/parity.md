@@ -19,10 +19,10 @@ for a subscription should not need an API key.
 | Capability | Grok Bot | MausBot | guhbot |
 |---|---|---|---|
 | Own model loop, any OpenAI-compatible endpoint | ✅ | ✅ | ✅ |
-| Claude Code as an engine | — | ✅ | ⚠️ driver built |
-| Codex as an engine | — | ✅ | ⚠️ driver built |
-| OpenCode as an engine | — | ✅ | ⚠️ driver built |
-| Agent Client Protocol (ACP) | — | ✅ | ⚠️ driver built |
+| Claude Code as an engine | — | ✅ | ✅ |
+| Codex as an engine | — | ✅ | ✅ |
+| OpenCode as an engine | — | ✅ | ✅ |
+| Generic CLI engine from an argv template | — | ✅ | ✅ |
 | Engine probing: installed / version / blocked | — | ✅ | ✅ |
 | Per-agent model choice | ✅ | ✅ | ✅ |
 | Cost reporting per run | ✅ | ✅ | ❌ |
@@ -103,7 +103,7 @@ for a subscription should not need an API key.
 |---|---|---|---|
 | Desktop app | ✅ | ✅ | ✅ |
 | Mobile app | ✅ | ✅ | ⚠️ unrun on device |
-| Reachable from a phone off your network | ✅ | ✅ | ⚠️ companion built, not yet wired into the CLI |
+| Reachable from a phone off your network | ✅ | ✅ | ✅ |
 | Pairing by code or QR | ✅ | ✅ | ✅ |
 | Signed, notarised installers | ✅ | ✅ | ❌ |
 | Docker deployment | — | ✅ | ❌ |
@@ -127,15 +127,16 @@ lands.
 
 ## What is left, in the order it should be done
 
-1. ~~**Engines**~~ — the drivers are built and tested, including the rate-limit
-   case that a naive driver reports as an empty success. What remains is mounting
-   them in the CLI so a user can pick one.
+1. ~~**Engines**~~ — done. `guhbot-host --list-engines` probes what is installed
+   and reports rate limits honestly; `--engine codex` (or claude-code, opencode)
+   runs agents through a subscription the user already pays for.
 2. **Routines** — the protocol methods exist and nothing implements them. "Show
    the bot how you do it once" is the single most-praised Grok Bot feature.
-3. **Wire the companion into the CLI.** The package is built and tested, but
-   `guhbot-host` still tells the user to run a companion that nothing can hand a
-   token verifier to. The fix is a `devices.verify` RPC, or the host spawning the
-   companion in-process.
+3. ~~**Wire the companion**~~ — done, by embedding it in the host process so it
+   reaches the device table directly: `--companion` binds the network, and
+   `--companion-insecure-plaintext` is required to acknowledge what that means.
+   A second process would have needed an RPC that hands one process another's
+   authentication decision, or a second opener of `data.db`.
 4. **Sign-in on the user's behalf** — cookies, per-origin approval, WebAuthn.
    This is what makes an agent able to work in the tools you actually use, and it
    is the largest remaining gap.

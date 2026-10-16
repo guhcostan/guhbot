@@ -27,6 +27,9 @@ export function RootNavigator(): ReactElement {
     return (
       <Screen>
         <View style={styles.starting}>
+          <View style={styles.mark}>
+            <Text style={styles.markText}>G</Text>
+          </View>
           <Text style={styles.brand}>guhbot</Text>
           <ActivityIndicator color={colors.muted} />
           <Text style={styles.hint}>Reading the pairing stored on this phone…</Text>
@@ -39,16 +42,17 @@ export function RootNavigator(): ReactElement {
     <Stack.Navigator
       screenOptions={{
         contentStyle: { backgroundColor: colors.background },
-        headerStyle: { backgroundColor: colors.surface },
+        headerStyle: { backgroundColor: '#0b0e12' },
         headerTintColor: colors.text,
-        headerTitleStyle: { fontSize: 17 },
+        headerTitleStyle: { fontSize: 16, fontWeight: '700' },
+        headerShadowVisible: false,
       }}
     >
       {state.status === 'unpaired' ? (
-        <Stack.Screen name="Pairing" component={PairingScreen} options={{ title: 'guhbot' }} />
+        <Stack.Screen name="Pairing" component={PairingScreen} options={{ title: 'guhbot', headerShown: false }} />
       ) : (
         <>
-          <Stack.Screen name="Agents" component={AgentsScreen} options={{ title: 'Agents', headerRight: () => <AgentsHeaderButtons /> }} />
+          <Stack.Screen name="Agents" component={AgentsScreen} options={{ title: 'guhbot', headerRight: () => <AgentsHeaderButtons /> }} />
           <Stack.Screen name="Thread" component={ThreadScreen} options={({ route }) => ({ title: route.params.agentName })} />
           <Stack.Screen name="Approvals" component={ApprovalsScreen} options={{ title: 'Approvals' }} />
           <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
@@ -59,7 +63,9 @@ export function RootNavigator(): ReactElement {
 }
 
 const styles = StyleSheet.create({
-  starting: { alignItems: 'center', flex: 1, gap: spacing.md, justifyContent: 'center' },
-  brand: { color: colors.text, fontSize: 28, fontWeight: '700' },
+  starting: { alignItems: 'center', flex: 1, gap: spacing.sm, justifyContent: 'center' },
+  mark: { alignItems: 'center', backgroundColor: colors.accent, borderRadius: 16, height: 56, justifyContent: 'center', width: 56 },
+  markText: { color: colors.accentInk, fontSize: 28, fontWeight: '800' },
+  brand: { color: colors.text, fontSize: 24, fontWeight: '800' },
   hint: { color: colors.muted, fontSize: 13 },
 });

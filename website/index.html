@@ -183,14 +183,15 @@
 
           <div class="mock">
             <div class="mock-side">
-              <div class="mock-search">Search</div>
+              <div class="mock-brand"><span class="mock-logo">G</span> guhbot</div>
+              <div class="mock-search">⌕ Search agents…</div>
               <div class="mock-agent mock-active">
                 <img src="./assets/avatar-1.svg" alt="" width="26" height="26" />
-                <span><b>Sales Analyst</b><i>waiting on your yes</i></span>
+                <span><b>Sales Analyst</b><i>● waiting on your yes</i></span>
               </div>
               <div class="mock-agent">
                 <img src="./assets/avatar-2.svg" alt="" width="26" height="26" />
-                <span><b>Inbox Manager</b><i>working</i></span>
+                <span><b>Inbox Manager</b><i>● working</i></span>
               </div>
               <div class="mock-agent">
                 <img src="./assets/avatar-3.svg" alt="" width="26" height="26" />
@@ -206,18 +207,18 @@
                 <img src="./assets/avatar-1.svg" alt="" width="22" height="22" />
                 <b>Sales Analyst</b>
                 <span class="mock-model">deepseek-v4.1-flash</span>
+                <span class="mock-run"><span class="mock-pulse"></span>waiting on you</span>
               </div>
-              <div class="bubble">&rarr; list_dir {"path": "."}</div>
-              <div class="bubble bubble-out">&larr; file sales.csv &middot; file summary.txt</div>
-              <div class="bubble">&rarr; read_file {"path": "sales.csv"}</div>
-              <div class="bubble bubble-out">&larr; region,units &middot; north,120 &middot; south,95 &hellip;</div>
+              <div class="bubble bubble-user">Summarize what changed in the workspace today.</div>
+              <div class="bubble">→ list_dir {"path": "."}</div>
+              <div class="bubble bubble-out">← file sales.csv · file summary.txt</div>
               <div class="bubble bubble-ask">
                 <span class="ask">Needs you</span>
-                Run <code>write_file</code> &mdash; summary.txt
+                Run <code>write_file</code> — summary.txt
                 <span class="ask-actions"><span class="ask-yes">Approve</span><span class="ask-no">Deny</span></span>
               </div>
-              <div class="bubble bubble-out">&larr; Wrote 10 characters to summary.txt.</div>
               <div class="bubble bubble-say">Total across all regions is <b>443</b>. Written to summary.txt.</div>
+              <div class="mock-composer"><span>Message Sales Analyst…</span><span class="mock-send">↑</span></div>
             </div>
           </div>
 

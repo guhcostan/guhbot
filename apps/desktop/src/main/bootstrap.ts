@@ -97,10 +97,11 @@ export async function bootstrapHost(options: BootstrapOptions): Promise<Bootstra
     ...(Object.keys(extraMethods).length > 0 ? { extraMethods } : {}),
   });
 
+  // The server binds loopback only by design; `lan` is retained on the
+  // options for a future companion path and intentionally not passed through.
   const server = new HostServer({
     host,
     ...(options.port !== undefined ? { port: options.port } : {}),
-    lan: options.lan ?? false,
   });
   const { port } = await server.listen();
 

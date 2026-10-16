@@ -22,6 +22,9 @@
       "path": "../canvas"
     },
     {
+      "path": "../companion"
+    },
+    {
       "path": "../engine-cli"
     },
     {

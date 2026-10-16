@@ -2,6 +2,7 @@ import type { Approval } from '@guhbot/protocol';
 import type { ReactElement } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
+import { Avatar } from '../components/Avatar.js';
 import { ConnectionBanner } from '../components/ConnectionBanner.js';
 import { NoticeCard } from '../components/NoticeCard.js';
 import { Pill } from '../components/Pill.js';
@@ -9,7 +10,7 @@ import { Screen } from '../components/Screen.js';
 import { capabilityFor } from '../core/capabilities.js';
 import { ageLabel, remainingLabel } from '../core/format.js';
 import { useAppState, useAppStore } from '../state/provider.js';
-import { colors, radius, spacing } from '../theme.js';
+import { colors, fontSize, radius, spacing } from '../theme.js';
 
 export function ApprovalsScreen(): ReactElement {
   const state = useAppState();
@@ -26,12 +27,16 @@ export function ApprovalsScreen(): ReactElement {
         keyExtractor={(approval) => approval.id}
         ListHeaderComponent={
           <View>
-            <ConnectionBanner view={state.connection} onRetry={() => void app.reconnect()} />
-            {canResolve.allowed ? (
-              <Text style={styles.lead}>
-                A run is parked until one of these is answered. Granting lets the run continue with the action it asked for.
+            <View style={styles.hero}>
+              <Text style={styles.heroTitle}>Waiting on you</Text>
+              <Text style={styles.heroSub}>
+                {state.approvals.length === 0
+                  ? 'Nothing parked right now.'
+                  : `${state.approvals.length} ${state.approvals.length === 1 ? 'run is' : 'runs are'} parked until answered.`}
               </Text>
-            ) : (
+            </View>
+            <ConnectionBanner view={state.connection} onRetry={() => void app.reconnect()} />
+            {canResolve.allowed ? null : (
               // The honest version of "you cannot do this here", shown before
               // the buttons rather than after a failed tap.
               <NoticeCard
@@ -59,7 +64,7 @@ export function ApprovalsScreen(): ReactElement {
           ) : (
             <NoticeCard
               tone={state.connection.state === 'unreachable' ? 'bad' : 'info'}
-              title={state.connection.state === 'unreachable' ? 'Could not read the approval queue' : 'Nothing waiting'}
+              title={state.connection.state === 'unreachable' ? 'Could not read the approval queue' : 'All clear'}
               detail={
                 state.connection.state === 'unreachable'
                   ? 'This list is empty because the host did not answer, not because nothing is pending. Reconnect and pull to refresh.'
@@ -102,15 +107,20 @@ function ApprovalRow({
   return (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
-        <Text style={styles.agent}>{agentName}</Text>
-        <Pill label={approval.kind} tone="info" />
+        <Avatar name={agentName} size={32} />
+        <View style={styles.cardTitle}>
+          <Text style={styles.agent} numberOfLines={1}>
+            {agentName}
+          </Text>
+          <Text style={styles.time}>
+            asked {ageLabel(approval.createdAt, Date.now())}
+            {approval.expiresAt === null ? '' : ` · expires ${remainingLabel(approval.expiresAt, Date.now())}`}
+          </Text>
+        </View>
+        <Pill label={approval.kind} tone="warn" />
       </View>
       <Text style={styles.summary}>{approval.summary}</Text>
       {showDetail ? <Text style={styles.detail}>{detail}</Text> : null}
-      <Text style={styles.muted}>
-        asked {ageLabel(approval.createdAt, Date.now())}
-        {approval.expiresAt === null ? '' : ` · expires ${remainingLabel(approval.expiresAt, Date.now())}`}
-      </Text>
       <View style={styles.actions}>
         <Pressable
           accessibilityRole="button"
@@ -118,7 +128,7 @@ function ApprovalRow({
           onPress={() => onResolve(true)}
           style={({ pressed }) => [styles.grant, pressed ? styles.pressed : null, !canResolve || busy ? styles.disabled : null]}
         >
-          {busy ? <ActivityIndicator color={colors.background} /> : <Text style={styles.grantText}>Grant</Text>}
+          {busy ? <ActivityIndicator color={colors.accentInk} /> : <Text style={styles.grantText}>✓ Approve</Text>}
         </Pressable>
         <Pressable
           accessibilityRole="button"
@@ -135,22 +145,27 @@ function ApprovalRow({
 }
 
 const styles = StyleSheet.create({
-  content: { padding: spacing.lg, paddingBottom: spacing.xl * 2 },
-  lead: { color: colors.muted, fontSize: 13, lineHeight: 19, marginBottom: spacing.md },
+  content: { padding: spacing.lg, paddingBottom: spacing.xxl * 2 },
+  hero: { marginBottom: spacing.md, marginTop: spacing.sm },
+  heroTitle: { color: colors.text, fontSize: fontSize.hero, fontWeight: '800', letterSpacing: -0.4 },
+  heroSub: { color: colors.muted, fontSize: fontSize.secondary, marginTop: 2 },
   muted: { color: colors.muted, fontSize: 12 },
   loadingRow: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm, paddingVertical: spacing.lg },
   card: {
     backgroundColor: colors.surface,
-    borderColor: colors.border,
+    borderColor: colors.warn,
+    borderLeftWidth: 3,
     borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
     gap: spacing.sm,
     marginBottom: spacing.md,
     padding: spacing.md,
   },
-  cardHeader: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm, justifyContent: 'space-between' },
-  agent: { color: colors.text, flexShrink: 1, fontSize: 15, fontWeight: '600' },
-  summary: { color: colors.text, fontSize: 14, lineHeight: 20 },
+  cardHeader: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm },
+  cardTitle: { flex: 1, minWidth: 0 },
+  agent: { color: colors.text, fontSize: 15, fontWeight: '700' },
+  time: { color: colors.faint, fontSize: fontSize.meta, marginTop: 1 },
+  summary: { color: colors.text, fontSize: fontSize.body, lineHeight: 20 },
   detail: {
     backgroundColor: colors.surfaceAlt,
     borderRadius: radius.sm,
@@ -160,18 +175,26 @@ const styles = StyleSheet.create({
     padding: spacing.sm,
   },
   actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
-  grant: { alignItems: 'center', backgroundColor: colors.good, borderRadius: radius.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
-  grantText: { color: colors.background, fontSize: 14, fontWeight: '700' },
+  grant: {
+    alignItems: 'center',
+    backgroundColor: colors.accent,
+    borderRadius: radius.sm,
+    flex: 1,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+  },
+  grantText: { color: colors.accentInk, fontSize: 14.5, fontWeight: '800' },
   deny: {
     alignItems: 'center',
     backgroundColor: colors.surfaceAlt,
     borderColor: colors.border,
     borderRadius: radius.sm,
     borderWidth: StyleSheet.hairlineWidth,
+    flex: 1,
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.md,
   },
-  denyText: { color: colors.text, fontSize: 14, fontWeight: '600' },
+  denyText: { color: colors.text, fontSize: 14.5, fontWeight: '700' },
   pressed: { opacity: 0.6 },
   disabled: { opacity: 0.4 },
 });

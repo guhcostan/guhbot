@@ -1142,3 +1142,103 @@ h2 {
   border: 1px solid #4a3d22;
   color: #b8a684;
 }
+
+/* ==========================================================================
+   Interface refresh: the site mock mirrors the real desktop layout
+   (sidebar + thread + floating composer), using the same Keeper tokens.
+   ========================================================================== */
+
+.mock-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 13.5px;
+  padding: 4px 10px 10px;
+  color: var(--text);
+}
+
+.mock-logo {
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  background: linear-gradient(150deg, #7defb0, #2f9c6a);
+  display: inline-grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 800;
+  color: #04120b;
+}
+
+.mock-active {
+  background: #141b22;
+  border: 1px solid #223040;
+}
+
+.mock-run {
+  margin-left: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--amber);
+  border: 1px solid #4a3d22;
+  background: rgba(224, 176, 84, 0.08);
+  padding: 2px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.mock-pulse {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--amber);
+  animation: mock-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes mock-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+.bubble-user {
+  font-family: var(--font);
+  align-self: flex-end;
+  background: #1b2634;
+  border: 1px solid #2a3a4e;
+  color: #e8eef5;
+  border-bottom-right-radius: 5px;
+  white-space: normal;
+  max-width: 78%;
+}
+
+.mock-composer {
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #151c24;
+  border: 1px solid #26303c;
+  border-radius: 16px;
+  padding: 9px 8px 9px 14px;
+  font-size: 13px;
+  color: #5f6975;
+}
+
+.mock-send {
+  margin-left: auto;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--mint);
+  color: #04120b;
+  display: inline-grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 14px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mock-pulse { animation: none; }
+}

@@ -6,8 +6,8 @@ import { colors, radius, spacing } from '../theme.js';
 export type PillTone = 'neutral' | 'info' | 'good' | 'warn' | 'bad';
 
 const TONE: Readonly<Record<PillTone, string>> = {
-  neutral: colors.muted,
-  info: colors.accent,
+  neutral: colors.faint,
+  info: colors.info,
   good: colors.good,
   warn: colors.warn,
   bad: colors.bad,
@@ -17,6 +17,7 @@ export function Pill({ label, tone = 'neutral' }: { readonly label: string; read
   const color = TONE[tone];
   return (
     <View style={[styles.pill, { borderColor: color }]}>
+      <View style={[styles.dot, { backgroundColor: color }]} />
       <Text style={[styles.label, { color }]}>{label}</Text>
     </View>
   );
@@ -24,11 +25,15 @@ export function Pill({ label, tone = 'neutral' }: { readonly label: string; read
 
 const styles = StyleSheet.create({
   pill: {
+    alignItems: 'center',
     alignSelf: 'flex-start',
-    borderRadius: radius.sm,
+    borderRadius: radius.pill,
     borderWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    gap: 5,
     paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
+    paddingVertical: 3,
   },
-  label: { fontSize: 11, fontWeight: '600', letterSpacing: 0.3, textTransform: 'uppercase' },
+  dot: { borderRadius: 3, height: 6, width: 6 },
+  label: { fontSize: 10.5, fontWeight: '700', letterSpacing: 0.4, textTransform: 'uppercase' },
 });

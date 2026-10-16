@@ -18,9 +18,12 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { AgentLoop, OpenAiCompatibleProvider, builtinTools } from '@guhbot/agent';
 import { Host, hashToken, newToken } from '@guhbot/host-core';
+import type { RunExecutor } from '@guhbot/host-core';
 import { HostServer, localAddresses } from './server.js';
 import { mountCapabilities } from './capabilities.js';
 import type { McpServerConfig } from '@guhbot/mcp';
+import { createCliEngines, createEngineRegistry } from '@guhbot/engine-cli';
+import { createCompanion, createHostVerifyToken, type Companion } from '@guhbot/companion';
 
 const VERSION = '0.1.0';
 
@@ -109,6 +112,11 @@ async function main(): Promise<void> {
       'mcp-config': { type: 'string' },
       'mcp-allow-stdio': { type: 'boolean', default: false },
       'messages-allow': { type: 'string' },
+      engine: { type: 'string' },
+      'list-engines': { type: 'boolean', default: false },
+      companion: { type: 'boolean', default: false },
+      'companion-port': { type: 'string' },
+      'companion-insecure-plaintext': { type: 'boolean', default: false },
       mode: { type: 'string', default: 'self-hosted' },
       help: { type: 'boolean', default: false },
     },
@@ -137,6 +145,15 @@ async function main(): Promise<void> {
         '  --mcp-config <path>    JSON file of MCP servers ({"mcpServers":{...}}).',
         '  --mcp-allow-stdio      Permit MCP servers that spawn local processes.',
         '  --messages-allow <csv> iMessage chats/handles this host may read and send to.',
+        '  --engine <id>          Run agents through an installed CLI instead of a model',
+        '                         API: claude-code, codex or opencode. No API key needed',
+        '                         when you already have a subscription for one of them.',
+        '  --list-engines         Probe the installed agent CLIs and exit.',
+        '  --companion            Also bind a network socket so a phone can connect.',
+        '  --companion-port <n>   Port for the companion (default 8787).',
+        '  --companion-insecure-plaintext',
+        '                         Required acknowledgement: without TLS, device tokens',
+        '                         cross the network in the clear.',
         '  --mode <m>             self-hosted | hosted (default self-hosted)',
         '',
       ].join('\n'),
@@ -149,6 +166,7 @@ async function main(): Promise<void> {
   const mode = values.mode === 'hosted' ? 'hosted' : 'self-hosted';
 
   const baseUrl = values['base-url'] ?? process.env['GUHBOT_BASE_URL'];
+  void values;
   const model = values.model ?? process.env['GUHBOT_MODEL'];
   const apiKey = process.env[values['api-key-env']];
   const allowedHosts = (values['allowed-hosts'] ?? '').split(',').map((h) => h.trim()).filter((h) => h.length > 0);
@@ -156,6 +174,57 @@ async function main(): Promise<void> {
   const workspace = values.workspace ?? join(dataDir, 'workspace');
   const browserHosts = (values['browser-hosts'] ?? '').split(',').map((h) => h.trim()).filter((h) => h.length > 0);
   const messagesAllow = (values['messages-allow'] ?? '').split(',').map((h) => h.trim()).filter((h) => h.length > 0);
+
+  // -- Engines --------------------------------------------------------------
+  //
+  // Handled before capabilities are mounted. `mountCapabilities` starts the
+  // scheduler, whose timer keeps the event loop alive; returning early after that
+  // leaves the process hanging instead of exiting. Anything that can return
+  // before the host is constructed has to run before that point.-----------------------------------------------------------
+  const engineRegistry = createEngineRegistry(createCliEngines());
+
+  if (values['list-engines'] === true) {
+    process.stdout.write('\n  Installed agent CLIs this host can drive:\n\n');
+    for (const descriptor of engineRegistry.list()) {
+      const engine = engineRegistry.get(descriptor.id);
+      const probe = engine ? await engine.probe() : null;
+      const state = probe === null ? '?' : !probe.available ? `not found (${probe.reason ?? 'no reason given'})` : probe.blocked !== null ? `installed, ${probe.blocked}` : `ready${probe.version !== null ? ` (${probe.version})` : ''}`;
+      process.stdout.write(`    ${descriptor.id.padEnd(14)} ${state}\n`);
+      if (probe !== null && probe.available && probe.blocked === null) {
+        process.stdout.write(`    ${' '.repeat(14)} needs: ${descriptor.requirement}\n`);
+      }
+    }
+    process.stdout.write('\n  Use one with --engine <id>.\n\n');
+    return;
+  }
+
+  const requestedEngine = values.engine;
+  let cliExecutor: RunExecutor | undefined;
+  if (requestedEngine !== undefined) {
+    const engine = engineRegistry.require(requestedEngine);
+    const probe = await engine.probe();
+    if (!probe.available) {
+      // Refusing to start is the honest response. Starting and failing on the
+      // first prompt would look like the agent is broken.
+      process.stderr.write(
+        `fatal: engine "${requestedEngine}" is not usable here: ${probe.reason ?? 'unknown reason'}\n` +
+          `       ${engine.requirement}\n`,
+      );
+      process.exit(2);
+    }
+    if (probe.blocked !== null) {
+      // A blocked engine is installed but cannot work right now. Warn rather than
+      // refuse: a rate limit resets, and the user may still want the host up.
+      process.stderr.write(`warning: engine "${requestedEngine}" is ${probe.blocked}; runs will fail until that clears\n`);
+    }
+    cliExecutor = engine.createExecutor({ cwd: workspace });
+    process.stdout.write(
+      `\n  engine        ${engine.name}${probe.version !== null ? ` ${probe.version}` : ''}\n` +
+        '                this engine runs its own tools and applies its own permission\n' +
+        '                rules, so this host records the run but does not gate its tools\n',
+    );
+  }
+
 
   const mcpServers = values['mcp-config'] !== undefined ? readMcpConfig(values['mcp-config']) : [];
   // The scheduler starts runs on a host that does not exist yet, because the host
@@ -188,7 +257,7 @@ async function main(): Promise<void> {
 
   // A host without a provider still works: it serves transcripts and settings,
   // and reports inferenceReady: false so clients can explain why runs fail.
-  const executor =
+  const apiExecutor =
     baseUrl !== undefined
       ? new AgentLoop({
           provider: new OpenAiCompatibleProvider({
@@ -209,6 +278,8 @@ async function main(): Promise<void> {
           cwd: workspace,
         })
       : undefined;
+
+  const executor: RunExecutor | undefined = cliExecutor ?? apiExecutor;
 
   const host = new Host({
     dataDir,
@@ -248,6 +319,39 @@ async function main(): Promise<void> {
   });
 
   const { port: boundPort, addresses } = await server.listen();
+
+  // The companion is the only process that binds a network socket, and it runs
+  // inside this one so it can reach the host's device table directly. The
+  // alternative, a separate process, cannot verify a token without either a new
+  // RPC that hands one process another's auth decision, or a second opener of
+  // data.db; both are worse than a thread.
+  let companion: Companion | null = null;
+  if (values.companion === true) {
+    const companionPort = values['companion-port'] !== undefined ? Number(values['companion-port']) : 8787;
+    const insecurePlaintext = values['companion-insecure-plaintext'] === true;
+    try {
+      companion = createCompanion({
+        harness: { port: boundPort },
+        verifyToken: createHostVerifyToken(host),
+        port: companionPort,
+        insecurePlaintext,
+        // The pairing URI must point at the companion, not at the loopback
+        // harness, or a scanned code sends the phone to an address only this
+        // machine can reach.
+        advertisedAddresses: localAddresses(),
+        redactPaths: [dataDir, workspace],
+      });
+      await companion.listen();
+    } catch (error) {
+      process.stderr.write(
+        `fatal: the companion could not start: ${error instanceof Error ? error.message : String(error)}\n`,
+      );
+      await server.close();
+      await host.close('companion failed');
+      process.exit(2);
+    }
+  }
+
   const status = host.status();
 
   process.stdout.write(
@@ -260,7 +364,9 @@ async function main(): Promise<void> {
       `  listening     ${addresses.map((a) => `http://${a}:${boundPort}`).join('  ')}`,
       `  inference     ${status.inferenceReady ? `ready (${model ?? 'provider default'})` : 'NOT CONFIGURED — set --base-url and --model'}`,
       `  reachable     from this machine only (loopback)`,
-      `  for phones    run the companion, which is the only process that binds a network socket`,
+      values.companion === true
+        ? `  for phones    ws://${localAddresses()[0] ?? '0.0.0.0'}:${companion?.port ?? 0}/rpc  (companion)`
+        : '  for phones    not exposed; restart with --companion to bind a network socket',
       `  workspace     ${workspace}`,
       `  capabilities  ${mounted.mounted.length > 0 ? mounted.mounted.join(', ') : 'none beyond built-in tools'}`,
       `  operator      ${join(dataDir, 'operator.token')}  (0600, person class)`,
@@ -268,15 +374,21 @@ async function main(): Promise<void> {
     ].join('\n'),
   );
 
-  process.stdout.write(
-    '  To reach this host from a phone, run the companion:\n' +
-      '    guhbot-companion --harness 127.0.0.1:' + String(boundPort) + '\n\n' +
-      '  The harness never binds a network socket. The companion is the only\n' +
-      '  process that does, and it is the only place that decides who may connect.\n\n',
-  );
+  if (values.companion !== true) {
+    process.stdout.write(
+      '  To reach this host from a phone, restart with --companion.\n' +
+        '  The harness itself never binds a network socket.\n\n',
+    );
+  } else if (values['companion-insecure-plaintext'] === true) {
+    process.stdout.write(
+      '  WARNING: plaintext. Device tokens cross your network in the clear.\n' +
+        '  Put a TLS terminator in front, or use a tailnet.\n\n',
+    );
+  }
 
   const shutdown = async (signal: string): Promise<void> => {
     process.stdout.write(`\n  ${signal} received, shutting down.\n`);
+    await companion?.close();
     await server.close();
     await host.close(signal);
     await mounted.dispose();

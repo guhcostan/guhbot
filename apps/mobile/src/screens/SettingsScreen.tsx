@@ -7,7 +7,7 @@ import { Pill } from '../components/Pill.js';
 import { Screen } from '../components/Screen.js';
 import { describeEndpoint } from '../core/endpoint.js';
 import { useAppState, useAppStore } from '../state/provider.js';
-import { colors, radius, spacing } from '../theme.js';
+import { colors, fontSize, radius, spacing } from '../theme.js';
 
 export function SettingsScreen(): ReactElement {
   const state = useAppState();
@@ -29,9 +29,13 @@ export function SettingsScreen(): ReactElement {
   return (
     <Screen>
       <ScrollView contentContainerStyle={styles.content}>
+        <View style={styles.hero}>
+          <Text style={styles.heroTitle}>Settings</Text>
+          <Text style={styles.heroSub}>This phone, its host, and pairing.</Text>
+        </View>
         <ConnectionBanner view={state.connection} onRetry={() => void app.reconnect()} />
 
-        <Section title="This device">
+        <Section title="✦ This device">
           <Row label="Name" value={host?.deviceName ?? 'unknown'} />
           <Row label="Device id" value={state.deviceId ?? host?.deviceId ?? 'unknown'} />
           <Row label="Address" value={host === null ? 'not paired' : describeEndpoint(host)} />
@@ -46,7 +50,7 @@ export function SettingsScreen(): ReactElement {
           ) : null}
         </Section>
 
-        <Section title="Host">
+        <Section title="◈ Host">
           {status === null ? (
             <Text style={styles.note}>{state.connection.ready ? 'Reading host status…' : 'Host status is unavailable while the phone is not connected.'}</Text>
           ) : (
@@ -70,7 +74,7 @@ export function SettingsScreen(): ReactElement {
           )}
         </Section>
 
-        <Section title="Pairing">
+        <Section title="⛓ Pairing">
           <Text style={styles.note}>
             If this phone is lost, revoke it on the host: the token stops working immediately. Unpairing here only deletes the token from this
             phone.
@@ -106,28 +110,33 @@ function Row({ label, value }: { readonly label: string; readonly value: string 
   return (
     <View style={styles.row}>
       <Text style={styles.rowLabel}>{label}</Text>
-      <Text style={styles.rowValue}>{value}</Text>
+      <Text style={styles.rowValue} numberOfLines={2}>
+        {value}
+      </Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  content: { padding: spacing.lg, paddingBottom: spacing.xl * 2 },
+  content: { padding: spacing.lg, paddingBottom: spacing.xxl * 2 },
+  hero: { marginBottom: spacing.md, marginTop: spacing.sm },
+  heroTitle: { color: colors.text, fontSize: fontSize.hero, fontWeight: '800', letterSpacing: -0.4 },
+  heroSub: { color: colors.muted, fontSize: fontSize.secondary, marginTop: 2 },
   section: {
     backgroundColor: colors.surface,
-    borderColor: colors.border,
+    borderColor: colors.borderSoft,
     borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
     gap: spacing.sm,
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
     padding: spacing.md,
   },
-  sectionTitle: { color: colors.text, fontSize: 16, fontWeight: '700', marginBottom: spacing.xs },
+  sectionTitle: { color: colors.text, fontSize: 15.5, fontWeight: '700', marginBottom: spacing.xs },
   row: { flexDirection: 'row', gap: spacing.md, justifyContent: 'space-between' },
-  rowLabel: { color: colors.muted, fontSize: 13 },
-  rowValue: { color: colors.text, flexShrink: 1, fontSize: 13, textAlign: 'right' },
-  pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  note: { color: colors.muted, fontSize: 12, lineHeight: 18, marginTop: spacing.xs },
+  rowLabel: { color: colors.muted, fontSize: 13, flexShrink: 0 },
+  rowValue: { color: colors.text, flex: 1, flexShrink: 1, fontSize: 13, textAlign: 'right' },
+  pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.xs },
+  note: { color: colors.muted, fontSize: 12.5, lineHeight: 19, marginTop: spacing.xs },
   danger: {
     alignItems: 'center',
     borderColor: colors.bad,

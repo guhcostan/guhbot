@@ -281,6 +281,9 @@ importers:
       '@guhbot/canvas':
         specifier: workspace:*
         version: link:../canvas
+      '@guhbot/companion':
+        specifier: workspace:*
+        version: link:../companion
       '@guhbot/engine-cli':
         specifier: workspace:*
         version: link:../engine-cli

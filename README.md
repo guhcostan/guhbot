@@ -9,7 +9,7 @@ your files, your shell and your browser — and every operation they can perform
 classified by whether it needs a human present.
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-67e8a2?style=flat-square)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-385%20passing-67e8a2?style=flat-square)](#testing)
+[![Tests](https://img.shields.io/badge/tests-660%20passing-67e8a2?style=flat-square)](#testing)
 [![Node](https://img.shields.io/badge/node-%E2%89%A522.5-339933?style=flat-square&logo=nodedotjs&logoColor=white)](#quick-start)
 
 [Website](https://d1490grrgfw1sj.cloudfront.net) · [Security](SECURITY.md) · [Architecture](docs/architecture.md) · [Reverse-engineering dossier](docs/re/00-index.md)
@@ -59,6 +59,7 @@ Nothing reaches the network unless you configured what it may reach.
 
 | Capability | State | Notes |
 |---|---|---|
+| Engines | ✅ | Drive Claude Code, Codex or OpenCode you already pay for, or any OpenAI-compatible endpoint. `--list-engines` probes and reports honestly, including a rate limit |
 | Files and commands | ✅ | One workspace jail, symlink-safe; no shell, so metacharacters stay literal; children never inherit your API keys |
 | Secrets | ✅ | AES-256-GCM under a `0600` key file; there is deliberately no `secrets.get` on the wire |
 | Agent loop | ✅ | Streaming inference, tool calling, approval escalation, turn and tool-call budgets |
@@ -66,8 +67,10 @@ Nothing reaches the network unless you configured what it may reach.
 | Browser | ✅ | Real Chromium, throwaway profile, egress denied by default and re-checked on every redirect |
 | macOS Messages | ✅ | Read-only handle on `chat.db`, opt-in per conversation, sends always approved |
 | Desktop app | ✅ | Electron shell with an embedded host, hardened window, no remote script |
+| Canvas | ✅ | Model-authored HTML, content-addressed, own CSP, frame with no same-origin access |
+| Automations | ✅ | Cron with DST handled, webhooks with sealed revocable secrets, coalesced catch-up |
+| Reachable from a phone | ✅ | `--companion` binds the network; the runtime itself never opens a socket |
 | Mobile app | ⚠️ | Complete and typechecked; the React Native bundle has not been run on a device |
-| Canvas and artifacts | ❌ | Not built |
 | Voice | ❌ | Not built |
 | Remote desktop | ❌ | Not built |
 | Hosted service | ⚠️ | Gateway, tenant isolation and waitlist are built and deployed; **not for sale** (no billing yet) |
@@ -188,7 +191,7 @@ stored unencrypted, and there is no cost budget per agent.
 pnpm test
 ```
 
-**385 tests** across 22 files, concentrating on properties that would be dangerous
+**660 tests** across 44 files, concentrating on properties that would be dangerous
 to get wrong rather than on coverage. Four more run against a live model when
 credentials are present.
 

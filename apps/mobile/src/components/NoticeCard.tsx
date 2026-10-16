@@ -41,7 +41,7 @@ export function NoticeCard({ tone = 'info', title, detail, action, onDismiss, ch
             </Pressable>
           )}
           {onDismiss === undefined ? null : (
-            <Pressable accessibilityRole="button" onPress={onDismiss} style={({ pressed }) => [styles.action, pressed ? styles.pressed : null]}>
+            <Pressable accessibilityRole="button" onPress={onDismiss} style={({ pressed }) => [styles.dismiss, pressed ? styles.pressed : null]}>
               <Text style={styles.dismissText}>Dismiss</Text>
             </Pressable>
           )}
@@ -54,7 +54,7 @@ export function NoticeCard({ tone = 'info', title, detail, action, onDismiss, ch
 const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
-    borderColor: colors.border,
+    borderColor: colors.borderSoft,
     borderLeftWidth: 3,
     borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
@@ -62,19 +62,20 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     padding: spacing.md,
   },
-  title: { fontSize: 14, fontWeight: '600' },
+  title: { fontSize: 13.5, fontWeight: '700' },
   detail: { color: colors.muted, fontSize: 13, lineHeight: 19 },
-  row: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
+  row: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
   action: {
-    backgroundColor: colors.surfaceAlt,
+    backgroundColor: colors.surfaceRaised,
     borderColor: colors.border,
     borderRadius: radius.sm,
     borderWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
   },
+  dismiss: { justifyContent: 'center', paddingHorizontal: spacing.sm, paddingVertical: spacing.sm },
   pressed: { opacity: 0.6 },
   disabled: { opacity: 0.5 },
-  actionText: { color: colors.text, fontSize: 13, fontWeight: '600' },
+  actionText: { color: colors.text, fontSize: 13, fontWeight: '700' },
   dismissText: { color: colors.muted, fontSize: 13 },
 });

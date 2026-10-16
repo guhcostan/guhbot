@@ -1,26 +1,38 @@
 import type { JSX } from 'react';
-import { useEffect, useRef, useState } from 'react';
-import type { Entry } from '@guhbot/protocol';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { Agent, Approval, Entry, Run } from '@guhbot/protocol';
 import { useHost } from './api.js';
+import './App.css';
 
 /**
- * The desktop UI.
+ * The desktop UI: a premium chat surface in the style of agentes.chat / Grok.
  *
- * Three things, in priority order: which agents exist, what the selected agent's
- * thread looks like, and what is waiting on a human decision. Approvals are
- * pinned at the top rather than buried in a menu, because a run that is parked
- * on an approval is doing nothing at all until someone looks at it.
+ * Layout: a quiet sidebar (which agents exist + how to reach them) and a
+ * central thread (what the selected agent is saying + what waits on a human).
+ * Approvals stay pinned above the thread because a parked run does nothing
+ * until someone looks at it.
  */
 export function App(): JSX.Element {
   const { state, selectAgent, sendPrompt, resolveApproval } = useHost();
   const [draft, setDraft] = useState('');
+  const [query, setQuery] = useState('');
   const threadRef = useRef<HTMLDivElement | null>(null);
 
-  // Keep the newest entry in view as the transcript grows.
   useEffect(() => {
     const node = threadRef.current;
     if (node) node.scrollTop = node.scrollHeight;
-  }, [state.entries.length]);
+  }, [state.entries.length, state.activeAgentId]);
+
+  const activeAgent = state.agents.find((a) => a.id === state.activeAgentId) ?? null;
+  const activeRun = useMemo(() => latestRun(state.runs, state.activeAgentId), [state.runs, state.activeAgentId]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (q.length === 0) return state.agents;
+    return state.agents.filter(
+      (a) => a.name.toLowerCase().includes(q) || (a.model ?? '').toLowerCase().includes(q),
+    );
+  }, [state.agents, query]);
 
   const submit = (): void => {
     const text = draft.trim();
@@ -29,168 +41,277 @@ export function App(): JSX.Element {
     void sendPrompt(text);
   };
 
-  const activeAgent = state.agents.find((a) => a.id === state.activeAgentId) ?? null;
-
   return (
-    <div style={styles.shell}>
-      <aside style={styles.sidebar}>
-        <div style={styles.brand}>
-          guhbot
-          <span style={styles.version}>{state.host?.version ?? ''}</span>
+    <div className="shell">
+      <aside className="sidebar">
+        <div className="brand">
+          <span className="brand-mark">G</span>
+          <span className="brand-name">guhbot</span>
+          <span className="brand-version">{state.host?.version ?? '…'}</span>
         </div>
 
-        <div style={styles.connRow}>
-          <span style={{ ...styles.dot, background: state.status === 'ready' ? '#2fbf71' : '#c9563f' }} />
+        <div className="conn">
+          <span className={`conn-dot ${state.status === 'ready' ? 'on' : 'off'}`} />
           {state.status === 'ready' ? 'connected' : state.status}
-          {state.deviceClass ? <span style={styles.pill}>{state.deviceClass}</span> : null}
+          {state.deviceClass !== null ? <span className="conn-pill">{state.deviceClass}</span> : null}
         </div>
 
-        <div style={styles.sectionLabel}>Agents</div>
-        <nav>
-          {state.agents.length === 0 ? (
-            <div style={styles.muted}>No agents yet.</div>
+        <label className="search">
+          <span className="ic">⌕</span>
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search agents…" aria-label="Search agents" />
+        </label>
+
+        <div className="side-label">
+          Agents <em>{state.agents.length}</em>
+        </div>
+        <nav className="agent-list" aria-label="Agents">
+          {filtered.length === 0 ? (
+            <div className="muted">{state.agents.length === 0 ? 'No agents yet. Create one on the host.' : 'No match.'}</div>
           ) : (
-            state.agents.map((agent) => (
+            filtered.map((agent) => (
               <button
                 key={agent.id}
                 type="button"
                 onClick={() => selectAgent(agent.id)}
-                style={{
-                  ...styles.agentRow,
-                  background: agent.id === state.activeAgentId ? '#1c2430' : 'transparent',
-                }}
+                className={`agent-row ${agent.id === state.activeAgentId ? 'active' : ''}`}
               >
-                <span style={styles.agentName}>{agent.name}</span>
-                {agent.unreadCount > 0 ? <span style={styles.badge}>{agent.unreadCount}</span> : null}
+                <span className="avatar" style={{ background: avatarGradient(agent.name) }}>
+                  {initials(agent.name)}
+                </span>
+                <span className="agent-meta">
+                  <span className="agent-name">{agent.name}</span>
+                  <span className="agent-sub">{agent.model ?? 'host default model'}</span>
+                </span>
+                {agent.unreadCount > 0 ? <span className="badge">{agent.unreadCount > 99 ? '99+' : agent.unreadCount}</span> : null}
+                <span className={`status-dot ${agent.status}`} title={agent.status} />
               </button>
             ))
           )}
         </nav>
 
-        <div style={styles.footnote}>
-          {state.host?.inferenceReady === false
-            ? 'No model configured. Start with GUHBOT_BASE_URL and GUHBOT_MODEL set.'
-            : `mode ${state.host?.mode ?? '-'}-hosted`}
+        <div className="side-foot">
+          {state.host?.inferenceReady === false ? (
+            <div className="host-card warn">
+              No model configured. Start with <b>GUHBOT_BASE_URL</b> and <b>GUHBOT_MODEL</b> set.
+            </div>
+          ) : (
+            <div className="host-card">
+              {state.host?.mode ?? 'self-hosted'} · {Object.entries(state.host?.capabilities ?? {}).filter(([, v]) => v).length} capabilities on
+            </div>
+          )}
         </div>
       </aside>
 
-      <main style={styles.main}>
-        {state.error !== null ? <div style={styles.errorBar}>{state.error}</div> : null}
+      <main className="main">
+        {state.error !== null ? <div className="error-bar">{state.error}</div> : null}
 
         {state.approvals.length > 0 ? (
-          <section style={styles.approvalBar}>
+          <section className="approvals" aria-label="Pending approvals">
             {state.approvals.map((approval) => (
-              <div key={approval.id} style={styles.approvalCard}>
-                <div style={styles.approvalKind}>{approval.kind}</div>
-                <div style={styles.approvalSummary}>{approval.summary}</div>
-                <div style={styles.approvalActions}>
-                  <button type="button" style={styles.grant} onClick={() => void resolveApproval(approval.id, true)}>
-                    Approve
-                  </button>
-                  <button type="button" style={styles.deny} onClick={() => void resolveApproval(approval.id, false)}>
-                    Deny
-                  </button>
-                </div>
-              </div>
+              <ApprovalCard key={approval.id} approval={approval} onResolve={(g) => void resolveApproval(approval.id, g)} />
             ))}
           </section>
         ) : null}
 
-        <header style={styles.header}>
-          <strong>{activeAgent?.name ?? 'No agent selected'}</strong>
-          {activeAgent?.model ? <span style={styles.muted}> · {activeAgent.model}</span> : null}
-        </header>
+        {activeAgent === null ? (
+          <WelcomeState onPick={(id) => selectAgent(id)} agents={state.agents} />
+        ) : (
+          <>
+            <header className="chat-header">
+              <span className="avatar" style={{ background: avatarGradient(activeAgent.name) }}>
+                {initials(activeAgent.name)}
+              </span>
+              <h2>{activeAgent.name}</h2>
+              {activeAgent.model !== null ? <span className="model">{activeAgent.model}</span> : null}
+              {activeRun !== null && (activeRun.status === 'running' || activeRun.status === 'waiting-approval' || activeRun.status === 'queued') ? (
+                <span className={`run-pill ${activeRun.status === 'waiting-approval' ? 'waiting' : ''}`}>
+                  <span className="pulse" />
+                  {activeRun.status === 'waiting-approval' ? 'waiting on you' : activeRun.status}
+                </span>
+              ) : null}
+            </header>
 
-        <div style={styles.thread} ref={threadRef}>
-          {state.entries.length === 0 ? (
-            <div style={styles.muted}>
-              {activeAgent === null ? 'Select an agent to see its thread.' : 'Nothing here yet.'}
+            <div className="thread" ref={threadRef}>
+              <div className="thread-inner">
+                {state.entries.length === 0 ? (
+                  <ThreadEmpty agent={activeAgent} onSuggest={(t) => setDraft(t)} />
+                ) : (
+                  state.entries.map((entry) => <EntryView key={entry.id} entry={entry} />)
+                )}
+              </div>
             </div>
-          ) : (
-            state.entries.map((entry) => <EntryRow key={entry.id} entry={entry} />)
-          )}
-        </div>
 
-        <footer style={styles.composer}>
-          <textarea
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault();
-                submit();
-              }
-            }}
-            placeholder={activeAgent === null ? 'Select an agent first' : 'Give the agent a task…'}
-            disabled={activeAgent === null}
-            style={styles.textarea}
-            rows={3}
-          />
-          <button type="button" onClick={submit} disabled={activeAgent === null || draft.trim().length === 0} style={styles.send}>
-            Send
-          </button>
-        </footer>
+            <div className="composer-zone">
+              <div className="composer">
+                <textarea
+                  value={draft}
+                  onChange={(event) => setDraft(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' && !event.shiftKey) {
+                      event.preventDefault();
+                      submit();
+                    }
+                  }}
+                  placeholder={`Message ${activeAgent.name}…`}
+                  rows={1}
+                  aria-label="Message composer"
+                />
+                <button type="button" className="send-btn" onClick={submit} disabled={draft.trim().length === 0} aria-label="Send">
+                  ↑
+                </button>
+              </div>
+              <div className="composer-hint">
+                <kbd>Enter</kbd> to send · <kbd>Shift + Enter</kbd> for a new line
+              </div>
+            </div>
+          </>
+        )}
       </main>
     </div>
   );
 }
 
-function EntryRow({ entry }: { entry: Entry }): JSX.Element {
-  const label =
-    entry.kind === 'tool-call'
-      ? `→ ${entry.toolName ?? 'tool'}`
-      : entry.kind === 'tool-result'
-        ? `← ${entry.toolName ?? 'tool'}`
-        : entry.role;
+/* — Approvals ——————————————————————————— */
 
-  const tone =
-    entry.role === 'user'
-      ? '#8ab4f8'
-      : entry.role === 'tool'
-        ? '#d0a24c'
-        : entry.role === 'system'
-          ? '#8b93a0'
-          : '#e6e8ec';
-
+function ApprovalCard({ approval, onResolve }: { approval: Approval; onResolve: (granted: boolean) => void }): JSX.Element {
   return (
-    <article style={styles.entry}>
-      <div style={{ ...styles.entryLabel, color: tone }}>{label}</div>
-      <pre style={{ ...styles.entryBody, color: tone, opacity: entry.id.startsWith('pending:') ? 0.6 : 1 }}>
-        {entry.content}
-      </pre>
-    </article>
+    <div className="approval-card">
+      <div className="approval-kind">⏸ {prettyKind(approval.kind)} · needs you</div>
+      <div className="approval-summary">{approval.summary}</div>
+      <div className="approval-actions">
+        <button type="button" className="btn-approve" onClick={() => onResolve(true)}>
+          Approve
+        </button>
+        <button type="button" className="btn-deny" onClick={() => onResolve(false)}>
+          Deny
+        </button>
+      </div>
+    </div>
   );
 }
 
-const styles = {
-  shell: { display: 'flex', height: '100vh', background: '#0b0d10', color: '#e6e8ec', font: '13px/1.5 ui-sans-serif, system-ui, sans-serif' },
-  sidebar: { width: 250, borderRight: '1px solid #1b2027', padding: '14px 12px', display: 'flex', flexDirection: 'column', gap: 10 },
-  brand: { fontWeight: 600, fontSize: 15, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' },
-  version: { color: '#69707d', fontSize: 11, fontWeight: 400 },
-  connRow: { display: 'flex', alignItems: 'center', gap: 6, color: '#9aa2ae', fontSize: 11 },
-  dot: { width: 7, height: 7, borderRadius: 7, display: 'inline-block' },
-  pill: { marginLeft: 'auto', background: '#1c2430', padding: '1px 6px', borderRadius: 4, fontSize: 10, color: '#9aa2ae' },
-  sectionLabel: { marginTop: 8, fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.7, color: '#69707d' },
-  agentRow: { display: 'flex', width: '100%', border: 0, color: '#e6e8ec', textAlign: 'left', padding: '7px 8px', borderRadius: 6, cursor: 'pointer', font: 'inherit', alignItems: 'center', gap: 6 },
-  agentName: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
-  badge: { marginLeft: 'auto', background: '#8ab4f8', color: '#0b0d10', borderRadius: 9, padding: '0 6px', fontSize: 10, fontWeight: 600 },
-  footnote: { marginTop: 'auto', color: '#69707d', fontSize: 10, lineHeight: 1.5 },
-  main: { flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 },
-  errorBar: { background: '#3a1d1a', color: '#f0b3a8', padding: '7px 12px', fontSize: 11, borderBottom: '1px solid #5a2a24' },
-  approvalBar: { display: 'flex', gap: 8, padding: 10, overflowX: 'auto', borderBottom: '1px solid #1b2027', background: '#14181e' },
-  approvalCard: { minWidth: 260, border: '1px solid #2b3644', borderRadius: 8, padding: 9, display: 'flex', flexDirection: 'column', gap: 6 },
-  approvalKind: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.6, color: '#d0a24c' },
-  approvalSummary: { fontSize: 12, color: '#e6e8ec' },
-  approvalActions: { display: 'flex', gap: 6, marginTop: 2 },
-  grant: { background: '#2fbf71', border: 0, color: '#06130c', borderRadius: 5, padding: '4px 10px', cursor: 'pointer', font: 'inherit', fontWeight: 600 },
-  deny: { background: 'transparent', border: '1px solid #3a4450', color: '#c9ced6', borderRadius: 5, padding: '4px 10px', cursor: 'pointer', font: 'inherit' },
-  header: { padding: '10px 14px', borderBottom: '1px solid #1b2027', fontSize: 12 },
-  thread: { flex: 1, overflowY: 'auto', padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 12 },
-  entry: { display: 'flex', flexDirection: 'column', gap: 3, maxWidth: 900 },
-  entryLabel: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.6, color: '#69707d' },
-  entryBody: { margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word', font: 'inherit' },
-  composer: { display: 'flex', gap: 8, padding: 10, borderTop: '1px solid #1b2027' },
-  textarea: { flex: 1, background: '#14181e', color: '#e6e8ec', border: '1px solid #262d36', borderRadius: 8, padding: 9, resize: 'none', font: 'inherit' },
-  send: { background: '#8ab4f8', border: 0, color: '#0b0d10', borderRadius: 8, padding: '0 18px', cursor: 'pointer', font: 'inherit', fontWeight: 600 },
-  muted: { color: '#69707d', fontSize: 12 },
-} as const;
+/* — Entries ————————————————————————————— */
+
+function EntryView({ entry }: { entry: Entry }): JSX.Element {
+  const [open, setOpen] = useState(false);
+  const streaming = entry.id.startsWith('pending:');
+
+  if (entry.kind === 'tool-call' || entry.kind === 'tool-result') {
+    return (
+      <div className={`tool-block ${entry.kind === 'tool-result' ? 'result' : ''}`}>
+        <button type="button" className="tool-head" onClick={() => setOpen((v) => !v)}>
+          <span className="arrow">{entry.kind === 'tool-call' ? '→' : '←'}</span>
+          <span className="tname">{entry.toolName ?? 'tool'}</span>
+          <span className="tkind">{entry.kind === 'tool-call' ? 'call' : 'result'} · {open ? 'hide' : 'show'}</span>
+        </button>
+        {open || streaming ? <pre className="tool-body">{truncate(entry.content, 4000)}</pre> : null}
+      </div>
+    );
+  }
+
+  const who = entry.role === 'user' ? 'user' : entry.role === 'system' ? 'system' : 'agent';
+  const failed = entry.kind === 'error';
+  return (
+    <div className={`msg ${who}`}>
+      {who === 'agent' ? (
+        <span className="avatar" style={{ background: 'linear-gradient(150deg,#7defb0,#2f9c6a)' }}>
+          ✦
+        </span>
+      ) : null}
+      <div style={{ maxWidth: who === 'user' ? '78%' : '100%', flex: who === 'user' ? undefined : 1 }}>
+        <div className={`bubble ${streaming ? 'streaming' : ''}`} style={failed ? { borderColor: '#5a2a24' } : undefined}>
+          {entry.content}
+          {streaming ? <span className="cursor">▍</span> : null}
+        </div>
+        <div className="msg-meta">
+          {who} · {formatTime(entry.createdAt)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* — Empty states ———————————————————————— */
+
+function ThreadEmpty({ agent, onSuggest }: { agent: Agent; onSuggest: (t: string) => void }): JSX.Element {
+  return (
+    <div className="empty">
+      <div className="empty-mark">✦</div>
+      <h2>Talk to {agent.name}</h2>
+      <p>Give it real work. Anything that spends, sends or changes the outside world waits for your yes.</p>
+      <div className="suggestions">
+        <button type="button" className="suggestion" onClick={() => onSuggest('Summarize what changed in the workspace today.')}>
+          <b>Summarize the day</b>
+          <span>Read the workspace and report back.</span>
+        </button>
+        <button type="button" className="suggestion" onClick={() => onSuggest('Check my inbox and draft replies, but do not send anything.')}>
+          <b>Triage my inbox</b>
+          <span>Drafts only — sending needs approval.</span>
+        </button>
+        <button type="button" className="suggestion" onClick={() => onSuggest('Look for failing tests and propose a fix.')}>
+          <b>Find failing tests</b>
+          <span>Inspect, explain, then ask before editing.</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function WelcomeState({ agents, onPick }: { agents: Agent[]; onPick: (id: string) => void }): JSX.Element {
+  return (
+    <div className="empty">
+      <div className="empty-mark">✦</div>
+      <h2>Your agents live here</h2>
+      <p>Pick one from the sidebar to see its thread. Runs stream in live, approvals park at the top.</p>
+      {agents.length > 0 ? (
+        <div className="suggestions">
+          {agents.slice(0, 3).map((a) => (
+            <button key={a.id} type="button" className="suggestion" onClick={() => onPick(a.id)}>
+              <b>{a.name}</b>
+              <span>{a.model ?? 'host default model'}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/* — Helpers (why: deterministic presentation, no network, no deps) ——————— */
+
+function latestRun(runs: Record<string, Run>, agentId: string | null): Run | null {
+  if (agentId === null) return null;
+  let best: Run | null = null;
+  for (const run of Object.values(runs)) {
+    if (run.agentId !== agentId) continue;
+    if (best === null || run.startedAt > best.startedAt) best = run;
+  }
+  return best;
+}
+
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return (parts[0]?.slice(0, 2) ?? '·').toUpperCase();
+  return `${parts[0]?.[0] ?? ''}${parts[1]?.[0] ?? ''}`.toUpperCase();
+}
+
+/** Stable pastel gradient per name, so avatars are distinguishable without images. */
+function avatarGradient(name: string): string {
+  let h = 0;
+  for (const c of name) h = (h * 31 + c.charCodeAt(0)) % 360;
+  return `linear-gradient(150deg, hsl(${h} 60% 72%), hsl(${(h + 40) % 360} 55% 52%))`;
+}
+
+function prettyKind(kind: Approval['kind']): string {
+  return kind.replace(/-/g, ' ');
+}
+
+function truncate(text: string, max: number): string {
+  return text.length > max ? `${text.slice(0, max)}\n… (${text.length - max} more chars)` : text;
+}
+
+function formatTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}

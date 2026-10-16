@@ -1,7 +1,7 @@
 import type { ReactElement, ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { colors, spacing } from '../theme.js';
+import { colors } from '../theme.js';
 
 /** Full-height background for a screen; each list manages its own padding. */
 export function Screen({ children }: { readonly children: ReactNode }): ReactElement {
@@ -9,5 +9,5 @@ export function Screen({ children }: { readonly children: ReactNode }): ReactEle
 }
 
 const styles = StyleSheet.create({
-  screen: { backgroundColor: colors.background, flex: 1, paddingTop: spacing.sm },
+  screen: { backgroundColor: colors.background, flex: 1 },
 });
