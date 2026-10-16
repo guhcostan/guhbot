@@ -21,10 +21,24 @@ import { Host, HostError, type Session } from '@guhbot/host-core';
  *
  * ## Binding and reachability
  *
- * The default bind is loopback. Exposing an agent that can run commands to the
- * local network is a decision the user has to make deliberately, so it takes an
- * explicit `--lan` flag, and turning it on is what makes the pairing flow
- * reachable from a phone at all.
+ * This server binds **loopback and nothing else**, and there is no flag to change
+ * that. Reachability from a phone is a separate process's job: `@guhbot/companion`
+ * terminates the network and forwards to this one over loopback.
+ *
+ * The separation is worth the extra moving part. The process that runs commands,
+ * holds credentials and reads your files never opens a listening socket that
+ * another machine can reach; the network-facing surface is a small proxy with a
+ * narrow job. It also means one auditable place decides who may connect, instead
+ * of that decision being smeared across the runtime.
+ *
+ * ## DNS rebinding
+ *
+ * Binding loopback is not sufficient on its own. A web page can resolve a
+ * hostname to 127.0.0.1 and then talk to this server *through the user's
+ * browser*, which is a way to reach a local service from a page the user merely
+ * visited. The defence is to check the `Host` header: a browser will send the
+ * attacker's hostname, and a genuine local client sends `127.0.0.1` or
+ * `localhost`. Anything else is refused before it reaches the host.
  *
  * ## Authentication
  *
@@ -38,8 +52,13 @@ import { Host, HostError, type Session } from '@guhbot/host-core';
 export interface HostServerOptions {
   host: Host;
   port?: number;
-  /** Bind to all interfaces so a phone on the same network can reach the host. */
-  lan?: boolean;
+  /**
+   * Extra hostnames to accept in the `Host` header.
+   *
+   * Only needed when something legitimate fronts this server and rewrites the
+   * header. The default set is loopback names only.
+   */
+  allowedHosts?: readonly string[];
   /** Absolute path served as a discovery document. */
   hostname?: string;
   /** Called with the pairing URI so a UI can render a QR code. */
@@ -66,7 +85,7 @@ export class HostServer {
   private readonly wss: WebSocketServer;
   private readonly sockets = new Map<WebSocket, Session>();
   private readonly requestedPort: number;
-  private readonly lan: boolean;
+  private readonly allowedHosts: Set<string>;
   private readonly onPairing: ((info: PairingInfo) => void) | undefined;
   private boundPort = 0;
   private unsubscribe: (() => void) | null = null;
@@ -74,10 +93,28 @@ export class HostServer {
   constructor(options: HostServerOptions) {
     this.host = options.host;
     this.requestedPort = options.port ?? 0;
-    this.lan = options.lan ?? false;
+    // Loopback names, plus anything the operator explicitly added. Port is
+    // stripped before comparison, because a Host header carries `name:port`.
+    this.allowedHosts = new Set([
+      '127.0.0.1',
+      'localhost',
+      '[::1]',
+      '::1',
+      ...(options.allowedHosts ?? []).map((h) => h.toLowerCase()),
+    ]);
     this.onPairing = options.onPairing;
 
     this.http = createServer((req, res) => this.handleHttp(req, res));
+
+    // Registered BEFORE the WebSocketServer, because upgrade listeners run in
+    // registration order and this one has to reject a bad Host before a
+    // handshake is completed.
+    this.http.on('upgrade', (req, socket) => {
+      if (this.isAllowedHost(req)) return;
+      socket.write('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');
+      socket.destroy();
+    });
+
     this.wss = new WebSocketServer({ server: this.http, path: '/rpc' });
     this.wss.on('connection', (socket, request) => this.handleConnection(socket, request));
   }
@@ -85,7 +122,7 @@ export class HostServer {
   async listen(): Promise<{ port: number; addresses: string[] }> {
     await new Promise<void>((resolve, reject) => {
       this.http.once('error', reject);
-      this.http.listen(this.requestedPort, this.lan ? '0.0.0.0' : '127.0.0.1', () => {
+      this.http.listen(this.requestedPort, '127.0.0.1', () => {
         this.http.off('error', reject);
         resolve();
       });
@@ -94,13 +131,14 @@ export class HostServer {
     const address = this.http.address();
     this.boundPort = typeof address === 'object' && address !== null ? address.port : this.requestedPort;
 
-    // Only advertise addresses that are actually reachable from another device.
-    const addresses = this.lan ? localAddresses() : ['127.0.0.1'];
-    this.host.setListenInfo(addresses, this.boundPort);
+    // This server is reachable only from this machine, so that is what it
+    // reports. A client asking `host.status` for somewhere to connect is told the
+    // truth rather than a LAN address this socket does not answer on.
+    this.host.setListenInfo(['127.0.0.1'], this.boundPort);
 
     // Fan out host events to every authenticated client.
     this.unsubscribe = this.subscribeToHostEvents();
-    return { port: this.boundPort, addresses };
+    return { port: this.boundPort, addresses: ['127.0.0.1'] };
   }
 
   private subscribeToHostEvents(): () => void {
@@ -136,7 +174,7 @@ export class HostServer {
   /** Mint a pairing code and hand the caller a URI a phone can scan. */
   createPairing(): PairingInfo {
     const { pairingId, code, expiresAt } = this.host.beginPairing();
-    const addresses = this.lan ? localAddresses() : ['127.0.0.1'];
+    const addresses = ['127.0.0.1'];
     const primary = addresses[0] ?? '127.0.0.1';
     const uri = `guhbot://pair?host=${encodeURIComponent(primary)}&port=${this.boundPort}&id=${pairingId}&code=${code}`;
     const info: PairingInfo = { pairingId, code, expiresAt, uri, addresses, port: this.boundPort };
@@ -148,7 +186,32 @@ export class HostServer {
   // HTTP
   // -------------------------------------------------------------------------
 
+  /**
+   * Whether the `Host` header names something we answer for.
+   *
+   * This is the DNS-rebinding defence, and it is the reason binding loopback is
+   * not enough by itself: a page the user merely visited can point a hostname at
+   * 127.0.0.1 and reach this server through their own browser. A real local client
+   * sends `127.0.0.1` or `localhost`; a rebinding attack sends its own name.
+   *
+   * A missing Host is refused too. HTTP/1.1 requires it, and a client that omits
+   * it is either broken or probing.
+   */
+  private isAllowedHost(req: IncomingMessage): boolean {
+    const raw = req.headers.host;
+    if (typeof raw !== 'string' || raw.length === 0) return false;
+    // Strip a port, and handle a bracketed IPv6 literal (`[::1]:8787`).
+    const host = raw.replace(/^\[([^\]]+)\]/, '$1').replace(/:\d+$/, '').toLowerCase();
+    return this.allowedHosts.has(host) || this.allowedHosts.has(`[${host}]`);
+  }
+
   private handleHttp(req: IncomingMessage, res: import('node:http').ServerResponse): void {
+    if (!this.isAllowedHost(req)) {
+      res.writeHead(403, { 'content-type': 'text/plain' });
+      res.end('forbidden: this host answers only to loopback names\n');
+      return;
+    }
+
     // A tiny discovery document, so a client that only knows the host and port
     // can learn whether it is paired and what the host supports.
     if (req.method === 'GET' && (req.url === '/' || req.url === '/health')) {
@@ -315,9 +378,9 @@ function toRpcError(error: unknown): RpcError {
 /**
  * Non-loopback IPv4 addresses, best-effort.
  *
- * Used only to *suggest* where a phone should connect. A machine with several
- * interfaces (VPN, docker bridge) will produce several candidates and the user
- * picks; getting this wrong is a UX problem, never a security one.
+ * Exported for the companion, which is the process that actually needs to tell a
+ * phone where to connect. This server never advertises one, because it does not
+ * answer on one.
  */
 export function localAddresses(): string[] {
   const out: string[] = [];

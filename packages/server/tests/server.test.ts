@@ -47,6 +47,100 @@ afterEach(() => {
   rmSync(dataDir, { recursive: true, force: true });
 });
 
+describe('network posture', () => {
+  it('binds loopback only, with no option to change it', async () => {
+    const { server, port } = await boot();
+    const address = (server as unknown as { http: { address(): { address: string } } }).http.address();
+    expect(address.address).toBe('127.0.0.1');
+    // And it is genuinely reachable there.
+    const response = await fetch(`http://127.0.0.1:${port}/health`);
+    expect(response.status).toBe(200);
+    await server.close();
+  });
+
+  it('refuses a request whose Host header is not a loopback name', async () => {
+    const { server, port } = await boot();
+
+    // A raw socket rather than fetch: `Host` is a forbidden header in the fetch
+    // spec, so undici silently drops it and the test would prove nothing.
+    const send = async (hostHeader: string): Promise<string> =>
+      new Promise<string>((resolve) => {
+        void import('node:net').then(({ connect }) => {
+          const socket = connect(port, '127.0.0.1', () => {
+            socket.write(
+              `GET /health HTTP/1.1\r\nHost: ${hostHeader}\r\nConnection: close\r\n\r\n`,
+            );
+          });
+          let data = '';
+          socket.on('data', (chunk: Buffer) => {
+            data += chunk.toString();
+          });
+          socket.on('end', () => resolve(data));
+          socket.on('error', () => resolve(data));
+          setTimeout(() => {
+            socket.destroy();
+            resolve(data);
+          }, 2000);
+        });
+      });
+
+    // This is the DNS-rebinding case: a page resolves evil.test to 127.0.0.1 and
+    // the user's browser then reaches a local service carrying the attacker's
+    // hostname. Binding loopback does not stop it; this check does.
+    const rebound = await send('evil.test');
+    expect(rebound).toContain('403');
+    expect(rebound).not.toContain('guhbot-host');
+
+    // A genuine local client is served.
+    expect(await send(`localhost:${port}`)).toContain('200');
+    expect(await send(`127.0.0.1:${port}`)).toContain('200');
+
+    await server.close();
+  });
+
+  it('refuses an upgrade whose Host header is not a loopback name', async () => {
+    const { server, port } = await boot();
+
+    const refused = await new Promise<string>((resolve) => {
+      // A raw socket, because fetch will not let us forge Host on an upgrade.
+      void import('node:net').then(({ connect }) => {
+        const socket = connect(port, '127.0.0.1', () => {
+          socket.write(
+            'GET /rpc HTTP/1.1\r\n' +
+              'Host: evil.test\r\n' +
+              'Upgrade: websocket\r\n' +
+              'Connection: Upgrade\r\n' +
+              'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n' +
+              'Sec-WebSocket-Version: 13\r\n\r\n',
+          );
+        });
+        let data = '';
+        socket.on('data', (chunk) => {
+          data += chunk.toString();
+          if (data.includes('\r\n\r\n')) {
+            socket.destroy();
+            resolve(data);
+          }
+        });
+        socket.on('error', () => resolve(data));
+        setTimeout(() => {
+          socket.destroy();
+          resolve(data);
+        }, 2000);
+      });
+    });
+
+    expect(refused).toContain('403');
+    await server.close();
+  });
+
+  it('reports only loopback as a reachable address', async () => {
+    const { server, host } = await boot();
+    expect(host.status().addresses).toEqual(['127.0.0.1']);
+    await server.close();
+  });
+});
+
 describe('discovery', () => {
   it('serves a health document a client can probe', async () => {
     const { server, port } = await boot();

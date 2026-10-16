@@ -27,5 +27,7 @@ export type {
 
 export { builtinTools, resolveInside } from './tools/builtin.js';
 export { assertCapability, collectContributions, prepareCapabilities } from './capability.js';
+export { classifyCliFailure, readJsonLines } from './engine.js';
+export type { CliChild, CliSpawn, Engine, EngineDescriptor, EngineProbe, EngineRunOptions } from './engine.js';
 export type { Capability } from './capability.js';
 export type { BuiltinToolOptions } from './tools/builtin.js';

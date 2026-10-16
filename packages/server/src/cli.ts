@@ -98,7 +98,6 @@ async function main(): Promise<void> {
     options: {
       'data-dir': { type: 'string' },
       port: { type: 'string' },
-      lan: { type: 'boolean', default: false },
       'base-url': { type: 'string' },
       model: { type: 'string' },
       'api-key-env': { type: 'string', default: 'GUHBOT_API_KEY' },
@@ -124,7 +123,6 @@ async function main(): Promise<void> {
         'Options:',
         '  --data-dir <path>      Where the database and secrets live (default ~/.guhbot)',
         '  --port <n>             Port to bind (default: an ephemeral port)',
-        '  --lan                  Bind all interfaces so a phone can connect',
         '  --base-url <url>       OpenAI-compatible API base, e.g. https://api.openai.com/v1',
         '  --model <name>         Default model for agents',
         '  --api-key-env <name>   Env var holding the API key (default GUHBOT_API_KEY)',
@@ -219,10 +217,7 @@ async function main(): Promise<void> {
 
   const operatorToken = await ensureOperatorToken(host, dataDir);
 
-  const server = new HostServer({
-    host,
-    port,
-    lan: values.lan,
+  const server = new HostServer({ host, port,
     onPairing: () => {
       /* CLI prints the pairing summary itself below. */
     },
@@ -240,7 +235,8 @@ async function main(): Promise<void> {
       `  host id       ${status.hostId}`,
       `  listening     ${addresses.map((a) => `http://${a}:${boundPort}`).join('  ')}`,
       `  inference     ${status.inferenceReady ? `ready (${model ?? 'provider default'})` : 'NOT CONFIGURED — set --base-url and --model'}`,
-      `  reachable     ${values.lan ? 'from your network (LAN mode)' : 'from this machine only'}`,
+      `  reachable     from this machine only (loopback)`,
+      `  for phones    run the companion, which is the only process that binds a network socket`,
       `  workspace     ${workspace}`,
       `  capabilities  ${mounted.mounted.length > 0 ? mounted.mounted.join(', ') : 'none beyond built-in tools'}`,
       `  operator      ${join(dataDir, 'operator.token')}  (0600, person class)`,
@@ -252,14 +248,12 @@ async function main(): Promise<void> {
     process.stdout.write(`  note          ${note}\n`);
   }
 
-  if (!values.lan) {
-    process.stdout.write(
-      '  To connect a phone, restart with --lan and pair it:\n' +
-        '    guhbot-host --lan ...\n\n' +
-        '  Reminder: LAN mode exposes this host to your local network. Anyone who\n' +
-        '  pairs keeps access until you revoke the device.\n\n',
-    );
-  }
+  process.stdout.write(
+    '  To reach this host from a phone, run the companion:\n' +
+      '    guhbot-companion --harness 127.0.0.1:' + String(boundPort) + '\n\n' +
+      '  The harness never binds a network socket. The companion is the only\n' +
+      '  process that does, and it is the only place that decides who may connect.\n\n',
+  );
 
   const shutdown = async (signal: string): Promise<void> => {
     process.stdout.write(`\n  ${signal} received, shutting down.\n`);
@@ -290,9 +284,6 @@ async function main(): Promise<void> {
         ].join('\n'),
       );
     });
-  } else if (values.lan) {
-    const info = server.createPairing();
-    process.stdout.write(`  pairing code ${info.code} (expires ${info.expiresAt})\n  uri ${info.uri}\n\n`);
   }
   void localAddresses;
 }
