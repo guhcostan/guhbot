@@ -75,7 +75,7 @@ Nothing reaches the network unless you configured what it may reach.
 | Mobile app | ⚠️ | Bundles for iOS (922 modules, Hermes bytecode) and typechecks; it has not been installed or driven on a device |
 | Voice | ❌ | Not built |
 | Remote desktop | ❌ | Not built |
-| Hosted service | ⚠️ | Gateway, tenant isolation and waitlist are built and deployed; **not for sale** (no billing yet) |
+| Hosted service | ⚠️ | Gateway, tenant isolation and waitlist are built and were verified end to end, then torn down deliberately; **not for sale** (no billing yet). One `cdk deploy` brings it back |
 
 ## Quick start
 
