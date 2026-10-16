@@ -824,3 +824,854 @@ backend directly; the main process and the coordinator do.
 | Diagnostic detail cap | 240 chars (`BMn`) | `99071`, `99077` | PROVEN |
 | Probe auth header | `` `authorization: ${rNe} ${e.token}` `` | `99084-99086` | PROVEN |
 | Network state broadcast | channel `sand:network-online` | `FINDINGS.md:61` | PROVEN (prior recon) |
+
+---
+
+# 4. Canvas, artifacts and HTML preview
+
+## 4.1 Six privileged schemes, one registration block
+
+```js
+// recon/beautified/main-core.beauty.js:21331-21343, verbatim
+var zl = "sand-canvas";
+function EL() {
+  _L.protocol.registerSchemesAsPrivileged([
+    { scheme: No, privileges: { standard: !0, secure: !0, supportFetchAPI: !0, stream: !0 } },
+    { scheme: zl, privileges: { standard: !0, secure: !0 } },
+    { scheme: fc, privileges: { standard: !0, secure: !0 } },
+    { scheme: Dl, privileges: { standard: !0, secure: !0 } },
+    { scheme: Ml, privileges: { standard: !0, secure: !0 } },
+    { scheme: gc, privileges: { standard: !0, secure: !0 } },
+    { scheme: "file", privileges: { standard: !0, codeCache: !0 } },
+  ]);
+}
+```
+
+| Binding | Literal | Declared at |
+|---|---|---|
+| `No` | `"sand-media"` | `main-core.beauty.js:20573` |
+| `zl` | `"sand-canvas"` | `main-core.beauty.js:21331` |
+| `fc` | `"sand-html-preview"` | `main-core.beauty.js:20336` |
+| `Dl` | `"sand-avatar"` | `main-core.beauty.js:17731` |
+| `Ml` | `"sand-favicon"` | `main-core.beauty.js:18477` |
+| `gc` | `"sand-mcp-app"` | `main-core.beauty.js:20338` |
+
+| Fact | Evidence | Tag |
+|---|---|---|
+| **No** sand scheme sets `bypassCSP`, `corsEnabled`, `allowServiceWorkers` or `codeCache` | the block above | PROVEN |
+| `sand-media` is the only sand scheme with `supportFetchAPI` and `stream` — the only fetchable, streamable one | `21334` | PROVEN |
+| `file:` is re-registered as `standard` with `codeCache` — the renderer heap loads with V8 code cache | `21340` | PROVEN |
+| A **seventh** scheme `sentry-ipc` is registered by the Sentry SDK with `{bypassCSP: !0, corsEnabled: !0, supportFetchAPI: !0, secure: !0}`, and the SDK **wraps `registerSchemesAsPrivileged` in a `Proxy`** so any later call also appends its own entry | `main-core.beauty.js:38782-38786` | PROVEN |
+
+> `sentry-ipc` is the **only** scheme in the app with `bypassCSP: true`. It is served solely from Sentry's own
+> `app.whenReady` handler across all app sessions (`main-core.beauty.js:38789-38804`), which bounds exposure,
+> but the contrast with the sandboxed artifact schemes is worth recording.
+
+## 4.2 Handler installation
+
+```js
+// recon/beautified/main-core.beauty.js:40661-40666, verbatim
+      ee.protocol.handle(Dl, c.serve),
+      DL(async (h) => (await _o.serveAttachmentImage?.(h)) ?? new Response(null, { status: 503 })),
+      ee.protocol.handle(Ml, async (h) => (await _o.serveLinkFavicon?.(h)) ?? new Response(null, { status: 503 })));
+    let S = { isEnabled: Cw(() => _o.readExperimentService?.()), stageDocument: xw };
+    (Iw(S),
+```
+
+| Scheme | Handler | Backing implementation | Tag |
+|---|---|---|---|
+| `sand-avatar` | `c.serve` | an avatar server object | PROVEN |
+| `sand-media` | inline lambda | `serveAttachmentImage(url)`, **HTTP 503** if absent | PROVEN |
+| `sand-favicon` | inline lambda | `serveLinkFavicon(url)`, **HTTP 503** if absent | PROVEN |
+| `sand-mcp-app` | `Iw(S)` → `Rw.protocol.handle(gc, t => nne(t, S.isEnabled))` | in-memory staged-document `Map` | PROVEN |
+| `sand-html-preview` | `qne`, registered alongside `sand-media` in `DL` | preview renderer | PROVEN |
+| `sand-canvas` | `wKe.protocol.handle(RKe.SAND_CANVAS_SCHEME, qnn(…))` at `main-app.beauty.js:82193` | canvas server | PROVEN |
+| scheme constant | `SAND_CANVAS_SCHEME` re-exported from main-core and equal to `zl` | `main-core.beauty.js:39680-39682` | PROVEN |
+
+**INFERRED:** the 503-when-missing shape means image loads fail as **broken images rather than errors** — no
+exception reaches the renderer. Right choice for a UI surface, but a missing media backend is invisible
+except through `desktopEdgeFailure` telemetry.
+
+## 4.3 `sand-media://image/<id>`
+
+```js
+// recon/beautified/main-core.beauty.js:20573-20591, abridged
+var No = "sand-media", FT = "image", cne = /^[0-9a-f]{32}$/;
+function Bw(e, t = 0) { let n = t > 0 ? `?r=${t}` : ""; return `${No}://${FT}/${e}${n}`; }
+function Gw(e) {
+  if (!URL.canParse(e)) return null;
+  let t = new URL(e);
+  if (t.protocol !== `${No}:` || t.host !== FT) return null;
+  let n = t.pathname.slice(1);
+  return dne(n) ? { id: n } : null;         // dne = cne.test
+}
+```
+
+| Fact | Evidence | Tag |
+|---|---|---|
+| Shape is exactly `sand-media://image/<32 lowercase hex>` with optional `?r=<n>` cache-buster | `Bw` / `Gw` / `cne` | PROVEN |
+| The id is a 128-bit hex token, not a path or filename — media is addressable only by opaque id | `cne` | PROVEN |
+| Path traversal is structurally impossible: any segment not matching 32 hex fails the parse | `Gw` returns `null` | PROVEN |
+| A second, unrelated hasher exists for media: SHA-256 over `` `sand-media\0${e}\0${t}` ``, base64url, first 22 chars (~132 bits), with domain separation | `SL(e, t)` at `main-core.beauty.js:21325-21327` | PROVEN |
+| Requests matching `Ym` (protocol + host `image`) go to the injected handler; everything else falls through to `Kne` | `Xne` at `21593-21595` | PROVEN |
+| The CSP `img-src` host form `sand-media://image` matches `FT = "image"` | CSP vs `FT` | PROVEN |
+| `resolve-media` (named in `FINDINGS.md:54`) was not isolated; whether it is a channel or a function | — | **UNKNOWN** |
+
+> **Security assessment (INFERRED).** `sand-media` is a **capability-URL** design: possessing the 32-hex id
+> suffices to fetch the bytes, and no per-request authorization check is visible in `Xne`/`DL`. The `SL`
+> hash makes ids unguessable, but ids are visible to anything that can read the DOM of a message, and there is
+> **no evidence of expiry or single-use semantics**.
+
+## 4.4 `sand-canvas:` — the artifact scheme
+
+```js
+// recon/beautified/main-app.beauty.js:81533-81556, abridged
+var _nn = "frame", X2e = /^[\w.:-]{1,128}$/;
+function eKe(e) {
+  let t = URL.canParse(e) ? new URL(e) : null;
+  if (t == null || t.protocol !== `${J2e.SAND_CANVAS_SCHEME}:` || t.hostname !== _nn ||
+      t.port !== "" || t.username !== "" || t.password !== "" || t.hash !== "") return null;
+  let n = t.searchParams.get("theme");
+  if (n !== "light" && n !== "dark") return null;
+  let r = t.searchParams.get("room"), o = r === null ? null : od(r);
+  if (o !== null && !o.ok) return null;
+  let i = t.searchParams.get("rev");
+  if (i !== null && !X2e.test(i)) return null;
+  let a = `?theme=${n}${o === null ? "" : `&room=${o.value}`}${Enn(i)}`;
+  if (t.search !== a) return null;
+  …
+  if (c.length === 3 && c[0] === "" && c[1] === "user")
+    return o !== null ? null : { locator: { kind: "active-user-store", canvasId: d.value }, theme: n, ...s };
+```
+
+| Fact | Evidence | Tag |
+|---|---|---|
+| Canonical URL: `sand-canvas://frame/<canvasId>?theme=light\|dark[&room=<id>][&rev=<id>]` | `eKe` | PROVEN |
+| Host must be exactly `frame`; port, username, password and fragment must all be **empty** | `81537-81542` | PROVEN |
+| `theme` is mandatory, `light` or `dark` only | `81543-81544` | PROVEN |
+| The query must match the canonical re-serialisation **exactly** — extra or reordered params rejected | `81554` | PROVEN |
+| Two locator kinds: `active-user-store` from `/user/<canvasId>`, `store` from `/store/<storeId>/<canvasId>` | `81570-81579` | PROVEN |
+| `room` is valid only on store locators, never on user-store locators | `81571` | PROVEN |
+| `rev` is a 1-128 char `[\w.:-]` token forwarded as `&rev=` | `X2e`, `Enn` | PROVEN |
+| A `groupChatId` can attach to a store canvas | `...(o === null ? {} : { groupChatId: o.value })` | PROVEN |
+| Cache budget **32 MiB** (`33554432`), estimated as `(bundleJsonText.length + dataJsonText.length) * 2` — i.e. 2× char count as a UTF-16 estimate | `tKe` at `81585-81586`; `bnn` at `81584` | PROVEN |
+| Eviction is LRU-ish: re-`get` re-inserts (Map order), eviction walks from the front | `81603` | PROVEN |
+| Refresh is coalesced per entry, guarded by a generation counter and an `AbortController` | `81604-81613` | PROVEN |
+| `clear()` bumps the generation, aborts in-flight refreshes, resets the budget | `81617-81621` | PROVEN |
+| A single oversize canvas is simply not cached | `81597` (`!(f > t)`) | PROVEN |
+| Refresh failures → `reportDesktopEdgeFailure("canvas-frame","refresh",…)`; typeface reads → `("canvas-frame","typeface-read","not_found")` | `81595`, `82187`, `82189-82191` | PROVEN |
+| A different typeface bundle applies to "Xvf" builds | `e.isXvfTypeface()` at `82199` | PROVEN |
+
+```js
+// recon/beautified/main-app.beauty.js:81632-81634, verbatim
+var Cnn = ["allow-scripts", "allow-popups", "allow-popups-to-escape-sandbox"],
+  vnn = Cnn.join(" "),
+  gOr = `sandbox ${vnn}`;
+```
+
+| Fact | Evidence | Tag |
+|---|---|---|
+| Sandbox is exactly `allow-scripts allow-popups allow-popups-to-escape-sandbox` | `81632-81634` | PROVEN |
+| `allow-same-origin` is **absent** — opaque origin, no access to host storage or cookies | absence in `Cnn` | PROVEN |
+| `allow-forms`, `allow-modals`, `allow-top-navigation`, `allow-pointer-lock`, `allow-presentation`, `allow-downloads` all **absent** | absence in `Cnn` | PROVEN |
+| `allow-popups-to-escape-sandbox` means a popup from a canvas is **not** sandboxed — the only escape hatch | `81632` | PROVEN |
+| Canvas link opens are additionally gated on a recent trusted gesture and an `http`/`https`/`mailto`/`tel` scheme (§1.6) | `main-core.beauty.js:28653-28678`; `main-app.beauty.js:108501` | PROVEN |
+| A link-interception script (`canvasLinkHref`, reading `href` **and** `xlink:href`) is injected into canvas content | `nKe()` at `81635-81646`; channel `sand-canvas-frame-open-link` at `81527` | PROVEN |
+
+> **Security assessment.** The sandbox set is strong (opaque origin, no forms, no modals, no top-navigation).
+> The single deliberate hole, `allow-popups-to-escape-sandbox`, is mitigated by the real user-activation gate
+> in §1.6. The larger exposure is `script-src 'unsafe-inline'` in the preview CSP (§4.5) — necessary for
+> agent-generated HTML/JS, and precisely why the origin must remain opaque.
+
+## 4.5 `sand-html-preview:` — agent HTML with a generated CSP
+
+```js
+// recon/beautified/main-core.beauty.js:20316-20333, abridged
+function wT(e) {
+  return [
+    "default-src 'none'",
+    `script-src 'self' 'unsafe-inline' ${Aa(e?.resourceDomains)}`,
+    `style-src 'self' 'unsafe-inline' ${Aa(e?.resourceDomains)}`,
+    `connect-src 'self' ${Aa(e?.connectDomains)}`,
+    `img-src 'self' data: ${Aa(e?.resourceDomains)}`,
+    `font-src 'self' ${Aa(e?.resourceDomains)}`,
+    `media-src 'self' data: ${Aa(e?.resourceDomains)}`,
+    `frame-src ${Aa(e?.frameDomains) || "'none'"}`,
+    "object-src 'none'",
+    `base-uri ${Aa(e?.baseUriDomains) || "'self'"}`,
+  ].join("; ");
+}
+function Aw(e, t, n) {
+  let r = `<meta http-equiv="Content-Security-Policy" content="${wT(t)}">`,
+    o = e.startsWith("\uFEFF") ? e.slice(1) : e;
+  return `<!DOCTYPE html>${r}${ene(n)}${Zte}${o}`;
+}
+```
+
+| Fact | Evidence | Tag |
+|---|---|---|
+| CSP is generated **per document** from four caller-supplied domain lists | `wT(e)` | PROVEN |
+| Baseline: `default-src 'none'`, `object-src 'none'`, `base-uri 'self'` | `20318`, `20326`, `20327` | PROVEN |
+| Inline script and style are **allowed** — required for agent-authored HTML | `20319-20320` | PROVEN |
+| `frame-src` is closed by default (`'none'`) when no `frameDomains` are supplied | `20325` | PROVEN |
+| The meta CSP is injected **immediately after `<!DOCTYPE html>`**, before any author content, so a later author-supplied CSP meta cannot supersede it | `Aw` | PROVEN |
+| A leading BOM is stripped so the meta tag still lands first | `Aw` | PROVEN |
+| Two bridge scripts are injected between the CSP and the author content | `ene(n)`, `Zte` | PROVEN |
+| Domain lists are sanitised before interpolation | `Wm(e)` → `e.filter(zte)` at `20152-20156` | PROVEN |
+| Domain interpolation escapes `& < > "` | `Aa(e)` at `20195-20201` | PROVEN |
+| The allow-pattern requires a public-looking hostname with an explicit scheme | `Yte = /^(?:https\|wss):\/\/(?:\*\.)?(?:[a-z0-9-]+\.)+[a-z]{2,}(?::\d{1,5})?$/i` at `20110` | PROVEN |
+| A **30-entry deny-list** blocks internal / SSRF-adjacent domains **including wildcard-DNS bypass services** | `qte` at `20111-20146`: `.local`, `.localhost`, `.internal`, `.intranet`, `.corp`, `.localdomain`, `.lan`, `.home`, `.svc`, `.home.arpa`, `.test`, `.invalid`, `.example`, `.alt`, `.onion`, `.nip.io`, `.sslip.io`, `.xip.io`, `.traefik.me`, `.localtest.me`, `.lvh.me`, `.localho.st`, `.vcap.me`, `.smackaho.st`, `.lacolhost.com`, `.localh.st`, `.local.gd`, `.1u.ms`, `.localhost.direct` | PROVEN |
+| `zte(e)` strips scheme and port, lowercases, and rejects an exact bare-name match **or** any suffix match | `20147-20154` | PROVEN |
+| Preview content is gated on an account-gate admission check, served as `text/html; charset=utf-8` with `cache-control: no-cache` | `main-core.beauty.js:21565-21572`, `21585-21587` | PROVEN |
+| Previews are backed by the attachment store — content is read via `readChunk(t, 0, …)` | `21575-21584` | PROVEN |
+| Only **HTML** content is served; anything else yields the refusal response (`Ec(n) !== "html" ? Po() : …`) | `21568` | PROVEN |
+| Total preview size is bounded by `eg` and the first read by `Bne` | `21577`, `21581` — the numeric values were not resolved | PROVEN for the guard; **UNKNOWN** for the values |
+
+## 4.6 `active-user-store-canvas` and `slack-canvas` are **not** protocols
+
+`FINDINGS.md:54` lists these beside the real schemes. Both are **locator/provider kinds** in other
+subsystems; neither appears in `registerSchemesAsPrivileged` nor in any `protocol.handle`.
+
+| Literal | Actual role | Evidence |
+|---|---|---|
+| `"active-user-store-canvas"` | a **kind** in the canvas-locator union: `` `active-user-store-canvas:${e.canvasId}` `` | `main-app.beauty.js:75605-75606` |
+| idem | an RPC-wire literal: `rpcObject({kind: rpcLiteral("active-user-store-canvas"), canvasId: Pqe})` | `77192` |
+| idem | excluded from store-id collection because it has no store | `81324-81326` |
+| idem | exported from the preload as part of the canvas-link API | `preload.beauty.js:3486` |
+| `"slack-canvas"` | a **link provider** parsed from `slack.com/docs/<F-id>/<p-id>`: `{provider:"slack-canvas", id:`${n}/${r}`, url:`${e.origin}/docs/${n}/${r}`}` | `main-app.beauty.js:80780`, matcher `Htn` at `80773-80781` |
+
+## 4.7 Link providers and connector ids
+
+```js
+// recon/beautified/main-app.beauty.js:80565-80592, verbatim (30 entries)
+var D2e = [
+  "notion", "google-docs", "google-sheets", "google-slides", "google-drive", "onedrive", "sharepoint",
+  "figma", "figjam", "figma-slides", "linear-issue", "linear-document", "confluence-page", "jira-issue",
+  "github-file", "github-gist", "github-issue", "slack-canvas", "box", "dropbox", "airtable", "coda",
+  "miro", "canva", "hex", "gmail-draft", "google-calendar-event", "slack-message",
+  "github-pull-request", "web",
+];
+```
+
+Each has a hand-written matcher emitting `{provider, id, url}` — GitHub PRs (`80731`), Jira (`80712`),
+Confluence (`80718`), Figma (`80683-80690`), Linear (`80699-80704`), Notion (`80615`), Google
+Drive/Docs (`80636-80637`), OneDrive/SharePoint (`80660-80669`), Airtable (`80799`), Coda (`80808`), Miro
+(`80812`), Canva (`80821`), Hex (`80832`), Gmail drafts (`80839`), Google Calendar (`80849`). **PROVEN.**
+
+```js
+// recon/beautified/main-app.beauty.js:75742-75792, verbatim (47 entries)
+var O7 = ["workspace","slack","notion","salesforce","microsoft-365","linkedin","zoom","github","cursor",
+  "jira","figma","hubspot","canva","trello","monday","clickup","intercom","zendesk","box","dropbox",
+  "docusign","calendly","loom","outreach","salesloft","apollo","clay","zoominfo","nooks","stripe",
+  "shopify","quickbooks","netsuite","ramp","workday","rippling","ashby","greenhouse","vercel","tableau",
+  "hex","amplitude","mixpanel","snowflake","databricks","mailchimp"],
+```
+
+This maps 1:1 onto the vendor logos shipped in the renderer (`salesforce.svg`, `rippling.png`,
+`snowflake.png`, `quickbooks.png`, `databricks.png`, `tableau.png`, `clay.png`, `zoominfo.png`, `nooks.png`,
+`workday.svg`, `mailchimp.svg`, `canva.svg`, `calendly.svg`, `linear.svg`, `ashby.png`) — independent
+corroboration that these are the marketed integrations. **PROVEN** for list and assets; INFERRED for the 1:1.
+
+## 4.8 `desktopMount` — the always-on-top desktop panel
+
+A genuine device integration: a borderless, position-persisted window floating on the user's desktop.
+
+```js
+// recon/beautified/main-app.beauty.js:85752-85770, verbatim (method list)
+  zJe = Ko("desktop-mount", {
+    methods: {
+      mount: I().args({ agentId: re(), name: ze, markSvgDataUrl: Ron }),
+      unmount: I().noArgs, offerChoices: I().args({ choices: xon }), read: I().noArgs,
+      readChoices: I().noArgs, readLayout: I().noArgs, submitPrompt: I().args({ prompt: OF }),
+      switchTo: I().args({ agentId: re() }), unmountSelf: I().noArgs,
+      reachForMenu: I().args({ heightPx: Mon }), movePanel: I().args({ dx: jJe, dy: jJe }),
+      endPanelMove: I().noArgs,
+    },
+    events: Nr(), failureCodes: Nr(),
+  });
+```
+
+| Fact | Evidence | Tag |
+|---|---|---|
+| Page is `src/electron-renderer/desktop-mount/panel/panel.html` → `renderer/desktop-mount/panel/panel.html` | `85696`, `85781-85782` | PROVEN |
+| Preload is `preload-desktop-mount-panel.cjs` (shipped in `dist/electron-preload/`) | `85780`; dir listing | PROVEN |
+| Fixed geometry: panel `320 × 176`, avatar area `{x:12,y:60,w:56,h:56}`, constants `16` and `12` | `85784-85787` | PROVEN |
+| Position persisted to `desktop-mount-position.json` in `userData` | `86091` | PROVEN |
+| `movePanel({dx,dy})` is a **delta** API with a validated integer range; out-of-range is a failure, not a silent clamp | `85750`, `JJe` at `85812` | PROVEN |
+| **macOS and Linux only** — `FJe(e) { return e === "darwin" \|\| e === "linux"; }` | `85699`; failure code `"desktop-mount/unsupported-platform"` at `85745` | PROVEN |
+| Other failure codes: `"desktop-mount/nothing-mounted"`, `"desktop-mount/unknown-choice"` | `85746-85747` | PROVEN |
+| Multi-display aware: prefers the work area with the largest overlap with its rect | `XJe` at `85783-85786`; `Bon(e,t)` overlap area at `85803-85819` | PROVEN |
+| The agent's identity mark is an **SVG data URL** (`markSvgDataUrl`, validated as `"svg data url"`) | `85748`, `85754`, `85768`; `preload.beauty.js:738` | PROVEN |
+| Mirrored in the preload and exposed as `contextBridge.exposeInMainWorld("desktopMount", …)` | `preload.beauty.js:741-758`, `4145` | PROVEN |
+| The panel can grow to reveal a menu (`reachForMenu({heightPx})`) | method list | PROVEN |
+| It is a **full mini-client**: it can submit a prompt and switch agent | `submitPrompt`, `switchTo` | PROVEN |
+| `offerChoices({choices})` lets the backend offer which agent to mount when several are eligible; capped by a `"at most ${Ite} mount targets"` validator | method list; `85751` | PROVEN |
+
+**INFERRED:** `desktopMount` is the "always there" surface for a Forever Box agent — the floating avatar that
+remains on the desktop while the bot works. With `place_phone_call`/voice (§6) and the box-desktop modal
+(§8), these form the device-integration story beyond the browser.
+
+---
+
+# 5. MCP: client, servers and MCP Apps
+
+## 5.1 Transports
+
+```js
+// recon/beautified/main-app.beauty.js:57641-57658, abridged
+      (Lbn = Zw({ type: To(Mit("stdio")), command: ao(), args: To(Jw(ao())), env: To(Bj(ao(), ao())),
+                  envFile: To(ao()), cwd: To(ao()), enabledTools: To(Jw(ao())),
+                  startupTimeoutSec: Pit(To(Tit().check(gF())), void 0) })),
+      (Ubn = Zw({ type: To(Tae(["http", "sse"])), url: ao(), headers: To(Bj(ao(), ao())), auth: To(Dbn),
+                  tls: To(Nbn), placement: To(Tae(["server", "client"])), enabledTools: To(Jw(ao())) })),
+      (Qit = xit([Lbn, Ubn])),
+      (Xw = Zw({ mcpServers: Bj(ao(), Qit) }));
+```
+
+| Fact | Evidence | Tag |
+|---|---|---|
+| Exactly **three** transports: `stdio`, `http`, `sse` | `Mit("stdio")`, `Tae(["http","sse"])` at `57643` / `57653` | PROVEN |
+| Config top level is `{ "mcpServers": { "<name>": <server> } }` — the Claude/Cursor convention | `Xw` | PROVEN |
+| A **`placement`** field distinguishes servers on the `server` (box) from the `client` (desktop) | `57655` | PROVEN |
+| stdio supports `command`, `args[]`, `env{}`, **`envFile`**, `cwd`, `enabledTools[]`, `startupTimeoutSec` | `Lbn` | PROVEN |
+| http/sse supports `url`, `headers{}`, `auth`, `tls`, `enabledTools[]` | `Ubn` | PROVEN |
+| Client credentials are `{CLIENT_ID, CLIENT_SECRET?, scopes[]}` | `Dbn` at `57639` | PROVEN |
+| A custom CA bundle is supported with a **128 KiB** ceiling | `Bbn = 128 * 1024`; `Nbn` at `57638-57640` | PROVEN |
+| Transport inferred from shape when not explicit | `Idt(e) { return "command" in e ? "stdio" : e.type === "sse" ? "sse" : "http"; }` at `64709` | PROVEN |
+| `type` normalised case-insensitively, defaulting to `http` | `Wxn(e)` at `66371` | PROVEN |
+| Empty `command` (stdio) or empty `url` (http) are rejected as unusable | `Dce` at `66378-66381`, `Wdt` at `66382-66385` | PROVEN |
+| Env placeholders are substituted before launch across `command`, `args`, `env`, `envFile`, `cwd` | `wdt(e,t)` at `64728-64740`; `Ice(e)` at `64723-64726` | PROVEN |
+| A server with a negative id is treated as unavailable | `Oce(e) { return e < 0; }` at `66387` | PROVEN |
+| Config discovery includes `.cursor/**/mcp.json` workspace patterns | `exec-daemon.beauty.js:32003` | PROVEN |
+| **UNKNOWN:** which library implements MCP. `@modelcontextprotocol/sdk`, `StdioClientTransport`, `SSEClientTransport`, `StreamableHTTPClientTransport` are all absent; the only `modelcontextprotocol` hits are the unrelated extension URI `"io.modelcontextprotocol/related-task"` (`main-app.beauty.js:56722`, `exec-daemon.beauty.js:59401`) | — | **UNKNOWN** |
+
+## 5.2 Manager and coordinator surface
+
+| Method | Auth | Args | Evidence |
+|---|---|---|---|
+| `getMcpState`, `getMcpCatalog`, `getEffectiveMcpPlugins`, `getMcpPluginLogo` | `background` | — | coordinator auth table |
+| `listMcpServerTools` | person | `wU` | `coordinator.beauty.js:34362` |
+| `toggleMcpToolDisabled` | person | `kK` | `34363` |
+| `installMcpEntry` | `person` | `CZt` | `32905`, `34357`; `main-app.beauty.js:41204` |
+| `updateMcpPluginInstall` | `person` | — | auth table |
+| `refreshMcp` | **`background`** | `{completion?}` | `32922`, `34358` |
+| `listBoxMcpServers` | **`background`** | `{serverIdentifiers[]}` | `32924`; `main-app.beauty.js:108464-108467` |
+| `authenticateMcpServer` | `person` | `W5` | `32919`, `34356` |
+| `completeMcpOAuth` | `person` | `{code, state}` | `32923`, `34359`; `main-app.beauty.js:41281` |
+| `readMcpAppResource` | `person` | `Ws` | `32920`, `34364` |
+| `callMcpAppTool` | `person` | `{serverIdentifier, toolName, argumentsJson, userActivated, agentId?}` | `34365-34371` |
+
+```js
+// recon/beautified/main-app.beauty.js:40666-40675, abridged (host settings)
+        mcpCustomInstructions: (0, p.rpcOptional)(BF),
+        mcpCustomInstructionsByServerId: (0, p.rpcOptional)(BF),
+        mcpCustomInstructionsAccountScope: (0, p.rpcOptional)((0, p.rpcNullable)((0, p.rpcString)())),
+        mcpDisabledToolsByServerId: (0, p.rpcOptional)((0, p.rpcRecord)((0, p.rpcArray)((0, p.rpcString)()))),
+        mcpBoxServers: (0, p.rpcOptional)((0, p.rpcArray)((0, p.rpcString)())),
+```
+
+| Fact | Evidence | Tag |
+|---|---|---|
+| Custom instructions exist at three scopes: global, per-server-id, per-account | the four `mcpCustomInstructions*` fields | PROVEN |
+| Tool disabling is **per server id**, as a record of string arrays | `mcpDisabledToolsByServerId` | PROVEN |
+| `mcpBoxServers: string[]` names which servers live on the box | `mcpBoxServers`; `listBoxMcpServers` is `background` | PROVEN |
+| `readMcpAppResource` args are `{serverIdentifier, resourceUri, agentId?, entryId?, sessionId?, documentSha256?}` | `Ws` at `coordinator.beauty.js:34146-34152` | PROVEN |
+| `documentSha256` lets the caller pin the exact document revision | `Ws`; re-checked at `main-app.beauty.js:38094-38097` | PROVEN |
+| `callMcpAppTool` carries a **`userActivated`** boolean | `coordinator.beauty.js:34368` | PROVEN |
+
+> **`userActivated` is the strongest single design fact here.** With the injected activation reporter (§5.5)
+> it means an MCP App **cannot call a tool purely because its script ran** — the host can require a real user
+> gesture inside the app frame. That is the correct defence against a malicious app enumerating tools and
+> firing them at load.
+
+## 5.3 OAuth
+
+```js
+// recon/beautified/main-app.beauty.js:474-484, abridged
+      (Ib = "https://www.cursor.com/agents/mcp/oauth/callback"),
+      (Qpe = "grokbot://mcp/oauth/callback"),
+      (rs = "http://localhost:8787/callback"),
+      (Gpe = "gb"), (Vpe = "gw"), (bx = "gd"), (Fz = "x-cursor-mcp-oauth-relayed-loopback"),
+      (Hpe = "xa"), (Bz = ".t"),
+      (uh = [18787, 28787, 31787]));
+    ((jpe = `${Bz}${bx}`),
+      (GSt = new Map([[Gpe, Qpe], [Vpe, Dz], [bx, rs], [Hpe, Nz], ...uh.map((e) => [`${bx}${e}`, vx(e)])])));
+```
+
+| Fact | Evidence | Tag |
+|---|---|---|
+| Five redirect strategies keyed by short mode codes (`gb`, `gw`, `gd`, `xa`, `gd<port>`) | above | PROVEN |
+| Redirect targets: `grokbot://mcp/oauth/callback`, `https://grok.com/connectors-oauth-exchange-code/`, `https://x.com/i/connectors/oauth_callback`, `http://localhost:8787/callback`, and loopback on 18787/28787/31787 | `Qpe`, `Dz` (`342`), `Nz` (`343`), `rs`, `uh` | PROVEN |
+| A custom header marks a backend-relayed loopback callback | `Fz = "x-cursor-mcp-oauth-relayed-loopback"` | PROVEN |
+| `cursor://anysphere.cursor-mcp/oauth/return` is another registered redirect | `QSt = \`cursor://${Upe}${Fpe}\`` with `Upe = "anysphere.cursor-mcp"`, `Fpe = "/oauth/return"` | PROVEN |
+| Loopback redirect URIs must be **HTTP on a loopback host with an explicit port** | `` _w(e) `` at `54333-54338`: *"MCP OAuth redirect_uri must be a loopback HTTP URL."* / *"…must include a port."* | PROVEN |
+| Accepted loopback hostnames: `localhost`, `127.0.0.1`, `::1`, `[::1]` | `_yn(e)` at `54323` | PROVEN |
+| The callback listener claims the port across several candidate hosts and matches a fixed body | `hyn` at `54302-54304`; `Ayn` at `54313-54321` | PROVEN |
+| Callback parsing requires a bounded `state`, accepts `code` or `error`, enforces pathname match, max query length and `GET` | `Hnt` at `54305-54312`; `byn` at `54339-54349` | PROVEN |
+| Discovery uses RFC 9728 protected-resource metadata, cached with an expiry | `` `${n.origin}/.well-known/oauth-protected-resource${n.pathname.replace(/\/+$/, "")}` `` at `53288`; cache `att.set(…)` | PROVEN |
+| Dynamic client registration is supported | `registration_endpoint`, `redirect_uris: Me(io)` at `57155-57222` | PROVEN |
+| PKCE is negotiated | `code_challenge_methods_supported: Me(V()).optional()` at `57169` | PROVEN |
+| `authenticateMcpServer` reports an outcome `connected \| cancelled` with a requesting agent id | `RK` at `coordinator.beauty.js:34131-34140` | PROVEN |
+| Deep-link auth callbacks are routed into the MCP manager and can be accepted **or rejected** | `main-app.beauty.js:98113-98117` | PROVEN |
+| Backend RPC is `CompleteMcpOAuthRequest{stateId, authorizationCode}` | `main-app.beauty.js:96182` | PROVEN |
+| Auth watching is a lifecycle module | error registry: `mcp-auth-watch-lifecycle.ts` for `authenticateServer` refusal branches, `checkAuthStatus` throw, `pollPendingAuthWatch` expiry | PROVEN |
+| The loopback helper is its own module | error registry: `mcp-oauth-loopback.ts` `handleRequest` failure branches | PROVEN |
+
+### Static connector registry
+
+Shared defaults: `clientRegistration: "static"`; Google also `authorizationParams: {access_type:"offline",
+prompt:"select_account consent"}`, `unauthenticatedConnect: !0`, `rejectsCustomSchemeRedirects: !0`
+(`main-app.beauty.js:344-353`).
+
+| Host | Provider | Notable | Evidence |
+|---|---|---|---|
+| `gmailmcp.googleapis.com` | `google-workspace` | `gmail.readonly`, `gmail.compose`, `gmail.modify` | `388-399` |
+| `drivemcp.googleapis.com` | `google-workspace` | `drive.readonly`, `drive.file` | `400-405` |
+| `calendarmcp.googleapis.com` | `google-workspace` | 4 calendar scopes | `406-415` |
+| `docsmcp` / `sheetsmcp` / `slidesmcp.googleapis.com` | `google-workspace` | `documents` / `spreadsheets` / `presentations` | `416-418` |
+| `bigquery.googleapis.com` | `google-workspace` | `bigquery` | `419` |
+| `api.x.com` | `x` | 17 scopes incl. `dm.read`, `dm.write`, `developer.write`, `offline.access`; `pinsScopesOverConfiguredScopes: !0` | `420-446` |
+| `mcp.money-dev/-staging/.x.com` | `x-money` | `backendOnlyTokenExchange: !0` | `447-449`, `349-355` |
+| `connectors-gateway.grok.gcp.mouseion.dev`, `connectors-gateway.grok.com` | `grok-connectors` | scopes `grok-plugins:access`, `offline_access` | `455-456`, `364-371` |
+| `mcp.hubspot.com` | `hubspot` | `backendOnlyTokenExchange: !0` | `457`, `358-363` |
+| `setup.shopify.com` | `shopify` | `unauthenticatedConnect: !0`, `rejectsCustomSchemeRedirects: !1` | `458-466` |
+
+**INFERRED:** `rejectsCustomSchemeRedirects: true` for Google/hubspot/x-money versus `false` for X and
+Shopify explains the multi-mode redirect map: the app must pick a redirect strategy per provider, and hosts
+that reject custom schemes are forced onto the HTTPS or loopback paths.
+
+## 5.4 `sand-mcp-app:` — the iframe protocol
+
+```js
+// recon/beautified/main-core.beauty.js:20338-20378, abridged
+var gc = "sand-mcp-app", bw = "app", Kl = new Map(), tne = 32;
+function xw(e) {
+  let t = (0, LT.randomUUID)(), n = (0, LT.randomUUID)();
+  for (Kl.set(t, { html: Aw(e.html, e.csp, n), csp: wT(e.csp) }); Kl.size > tne;) {
+    let r = Kl.keys().next();
+    if (r.done === !0) break;
+    Kl.delete(r.value);
+  }
+  return { frameUrl: `${gc}://${bw}/${t}`, bridgeKey: n };
+}
+function nne(e, t) {
+  if (!t()) return new Response(null, { status: 404 });
+  let n; try { n = new URL(e.url); } catch { return new Response(null, { status: 400 }); }
+  let r = n.pathname.replace(/^\/+/, ""), o = Kl.get(r);
+  return o === void 0 ? new Response(null, { status: 404 })
+    : new Response(o.html, { status: 200,
+        headers: { "content-type": mc, "content-security-policy": o.csp, "cache-control": "no-store" } });
+}
+function MT(e) { let t = URL.parse(e); return t?.protocol === `${gc}:` && t.host === bw; }
+function vw(e, t) { return t != null && URL.parse(t)?.protocol === `${gc}:` && !MT(e); }
+function Iw(e) { Rw.protocol.handle(gc, (t) => nne(t, e.isEnabled)); }
+function Cw(e) { return () => e()?.checkFeatureGate("sand_mcp_apps", { disableExposureLog: !0 }) ?? !1; }
+```
+
+| Fact | Evidence | Tag |
+|---|---|---|
+| Frame URL shape is `sand-mcp-app://app/<uuid-v4>` | `xw` + `MT` | PROVEN |
+| The document id is a **random UUID**, not derived from server+resource — app documents are not addressable across restarts | `LT.randomUUID()` | PROVEN |
+| A second random UUID is minted as **`bridgeKey`**, a per-document secret for the `postMessage` bridge | `xw` return | PROVEN |
+| Staged documents live in an in-memory `Map` capped at **32**, evicted FIFO | `Kl`, `tne = 32`, eviction loop | PROVEN |
+| Only the **staged HTML** is served — never disk, never the network | `nne` returns `o.html` | PROVEN |
+| The response sets a **per-document CSP header** *and* an equivalent `<meta>` | `headers["content-security-policy"]`; `Aw` injecting the meta | PROVEN |
+| `cache-control: no-store` prevents serving a revoked app document from cache | `nne` | PROVEN |
+| A disabled gate turns **every** request into `404`, not `403` | `if (!t()) return new Response(null, {status:404})` | PROVEN |
+| Malformed URL → `400`; unknown id → `404` | `nne` | PROVEN |
+| Leading slashes are stripped, so `sand-mcp-app://app///<uuid>` resolves identically | `n.pathname.replace(/^\/+/, "")` | PROVEN |
+| `vw(e,t)` detects a **popup**: referrer is an mcp-app URL but the current URL is not | `vw`; used in `will-frame-navigate` handling at `main-core.beauty.js:28682-28688` | PROVEN |
+| The whole subsystem is gated on `sand_mcp_apps`, which **defaults to `false`** | `main-app.beauty.js:48431`; `Cw` | PROVEN |
+| Requesting an app while gated off raises a typed error with a literal message | `main-app.beauty.js:94054`: `throw new st({ code: Zqe, detail: "MCP Apps are behind the sand_mcp_apps gate." })` | PROVEN |
+| An app document is capped at **8 MiB** | `DT = 8 * 1024 * 1024` at `main-core.beauty.js:20103`; helper `yw()` → `` `This MCP App document is larger than ${DT / (1024 * 1024)} MiB.` ``; code `hw = "mcp_app_saved_page_unavailable"` at `20106-20108` | PROVEN |
+| A separate **256 KiB** constant `qBe` sits beside `DT` — most plausibly a saved-page/sidecar limit | `qBe = 256 * 1024` at `20102` | INFERRED |
+
+## 5.5 The two injected bridge scripts
+
+Every staged document is `<!DOCTYPE html><meta CSP>{activation}{resize}{author HTML}` (`Aw`).
+
+**(a) Resize reporter** (`Zte`, `main-core.beauty.js:20203-20265`). Measures height from five independent
+signals (`body.scrollHeight`, `body.offsetHeight`, `documentElement.offsetHeight`, a device-pixel-rounded
+`getBoundingClientRect().height`, and `scrollHeight > clientHeight ? scrollHeight : 0`), takes the max, and
+posts changes to `window.parent` with `targetOrigin: "*"`. It implements hysteresis — it refuses to shrink
+while the parent has not yet applied the smaller height (`refusedHeight`, `shrunkTo`) — so a transient
+layout collapse cannot ratchet the iframe down.
+
+**(b) Activation reporter** (`ene`, `main-core.beauty.js:20266-20306`):
+
+```js
+// recon/beautified/main-core.beauty.js:20267-20283 and 20285-20306, abridged
+  Qte = ["Escape","Alt","AltGraph","CapsLock","Control","Fn","FnLock","Hyper","Meta","NumLock",
+         "ScrollLock","Shift","Super","Symbol","SymbolLock"];
+…
+	const activation = navigator.userActivation;
+	const isActive = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(activation), "isActive").get;
+	const keyOf = Object.getOwnPropertyDescriptor(KeyboardEvent.prototype, "key").get;
+	const timeStampOf = Object.getOwnPropertyDescriptor(Event.prototype, "timeStamp").get;
+	const timeOrigin = performance.timeOrigin;
+	post({ jsonrpc: "2.0", method: ${Km(Kte)} }, "*");        // Kte = "ui/notifications/sandbox-document"
+	const reportIfActive = (event) => {
+		if (!event.isTrusted || !apply(isActive, activation, [])) return;
+		post({ jsonrpc: "2.0", method: ${Km($te)},         // $te = "ui/notifications/sandbox-activation"
+		       params: { key: ${Km(e)}, activatedAtMs: timeOrigin + apply(timeStampOf, event, []) } }, "*");
+	};
+	addEventListener("pointerdown", reportIfActive, { capture: true, passive: true });
+	addEventListener("pointerup",   reportIfActive, { capture: true, passive: true });
+	addEventListener("keydown", (event) => {
+		if (nonActivatingKeys[apply(keyOf, event, [])] !== true) reportIfActive(event);
+	}, { capture: true, passive: true });
+	script?.remove();
+```
+
+| Fact | Evidence | Tag |
+|---|---|---|
+| The bridge is **JSON-RPC 2.0 over `postMessage`** with `targetOrigin: "*"` | the `post({jsonrpc:"2.0", …}, "*")` calls | PROVEN |
+| Exactly two notification methods: `ui/notifications/sandbox-document` (load) and `ui/notifications/sandbox-activation` (genuine activation) | `Kte`, `$te` at `20104-20105` | PROVEN |
+| Activation requires `event.isTrusted` **and** `navigator.userActivation.isActive`, resolved through **saved property getters** so app code cannot trivially monkey-patch them | `apply(isActive, activation, [])`, `Object.getOwnPropertyDescriptor(...).get` | PROVEN |
+| `activatedAtMs = performance.timeOrigin + event.timeStamp` — a shared clock the host can verify | `timeOrigin + apply(timeStampOf, event, [])` | PROVEN |
+| Modifier-only and lock keys do **not** count as activation (15 keys) | `Qte` | PROVEN |
+| The script **removes its own `<script>` element** after install, so app code cannot re-read it | `script?.remove()` | PROVEN |
+| `Km(e)` escapes `<` as `\u003c` in the interpolated key literal, preventing a script-tag break-out | `Km` at `20260-20262` | PROVEN |
+| Both scripts bind with `{capture: true, passive: true}` — observed without being cancellable by app code | `ene`, `Zte` | PROVEN |
+
+> **Security assessment (PROVEN facts).** The activation bridge is well built: trusted-event and
+> `userActivation` checks, saved getters, capture-phase passive listeners, self-removal, `<` escaping. The
+> notable weakness is `targetOrigin: "*"` on the app→host direction — harmless outbound (the app is in an
+> opaque origin and the parent is fixed) but it means the host must validate `event.source`, and the
+> `bridgeKey` exists precisely because origin matching is unavailable. **Whether the host actually validates
+> `bridgeKey` on inbound messages is not visible at the protocol-handler layer and remains UNKNOWN.**
+
+## 5.6 Trays
+
+```js
+// recon/beautified/main-app.beauty.js:41232-41234, verbatim
+          getTrays: I().noArgs,
+          dismissTray: I().args({ id: (0, p.rpcString)() }),
+          clearTrays: I().noArgs,
+```
+
+| Method | Auth class | Evidence |
+|---|---|---|
+| `getTrays` | `background` | `main-app.beauty.js:74300` |
+| `dismissTray` | `person` | `74301` |
+| `clearTrays` | `person` | `74302` |
+
+| Claim | Tag | Reasoning |
+|---|---|---|
+| A tray is an **accumulated, id-addressable collection of pending items**: list-all / remove-one / remove-all | PROVEN | the three-method shape; `dismissTray({id})` is only meaningful if several coexist |
+| Trays can be **read** unattended but **dismissed** only with the user present | PROVEN | auth table |
+| Tray items are **informational**, not actionable: every neighbouring API has its own response handler (`respondToWidget`, `submitUserForm`, `resolveAutoReviewApproval`) while trays have only dismissal | INFERRED | comparison of methods at `main-app.beauty.js:41230-41245` |
+| The tray item element type | — | **UNKNOWN** — no schema was found; the coordinator reply type is only `record` (`coordinator.beauty.js:36916`) |
+
+**INFERRED:** trays are where a background agent parks "here are the things that need you" items so the
+user's attention is batched rather than interrupted — consistent with the product's "only comes back when
+your approval is needed" positioning.
+
+---
+
+# 6. Voice harness
+
+## 6.1 The `SAND_VOICE_HARNESS` switch
+
+Exactly **one** occurrence in the whole evidence set:
+
+```js
+// recon/beautified/preload.beauty.js:4122, verbatim
+      devVoiceHarness: process.env.SAND_VOICE_HARNESS === "backend" ? "backend" : "package",
+```
+
+| Fact | Evidence | Tag |
+|---|---|---|
+| The variable takes exactly two effective values: `"backend"` and the fallback `"package"` | above | PROVEN |
+| Any other value — including unset — yields `"package"`; there is **no enum validation**, so a typo silently selects `package` | the ternary | PROVEN |
+| It is a dev-only switch, surfaced on the preload object as `devVoiceHarness` | the property name | PROVEN |
+| The package `@anysphere/voice-call-harness` and any dynamic `import`/`require` of it | **NOT FOUND** in any of the nine beautified bundles | — |
+| Whether `"package"` means "use the bundled in-process harness" and `"backend"` means "delegate to the `VoiceCallHarness*` RPCs" | **INFERRED** — the pairing of the two values with the two available implementations is the only reading consistent with the naming, but no line states it | — |
+
+## 6.2 The backend service
+
+```js
+// recon/beautified/coordinator.beauty.js:28493-28494, verbatim
+    voiceCallHarnessSession: { name: "VoiceCallHarnessSession", I: hh, O: Ah, kind: g.Unary },
+    voiceCallHarnessTool:    { name: "VoiceCallHarnessTool",    I: Eh, O: _h, kind: g.Unary },
+```
+
+```text
+VoiceCallHarnessSessionRequest|1 agent_id 9|2 agent_name 9|3 user_name 9?|4 description 9?|5 spoken_language 9?
+VoiceCallHarnessSessionResponse|1 instructions 9|2 tools #0*|3 has_overheard 8|4 greeting #1|5 receipt #2
+VoiceCallHarnessToolRequest|1 agent_id 9|2 call_id 9|3 name 9|4 input #0|5 line #1
+VoiceCallHarnessToolResponse|1 kind #0|2 output #1
+VoiceCallToolDescriptor|1 type 9|2 name 9|3 description 9|4 parameters #0
+VoiceCallGreeting|1 direction 9|2 with_landed_work 9
+VoiceCallLineState|1 they_just_talked 8|2 news_owed 8|3 receipt_owed 8|4 already_spoke_this_turn 8
+VoiceCallReceipt|1 output #0|2 instructions 9 ; VoiceCallReceiptOutput|1 receipt 9
+VoiceCallHarnessToolOutcomeKind :: UNSPECIFIED, SERVED, UNKNOWN_TOOL, INVALID_INPUT
+```
+
+| Fact | Evidence | Tag |
+|---|---|---|
+| Both RPCs are **unary** and sit on the same service descriptor as the virtual-card RPCs | `kind: g.Unary`; juxtaposition with `28260` | PROVEN |
+| Service name `aiserver.v1.GrokBotService` | `FINDINGS.md:99` | PROVEN (prior recon) |
+| The **server** decides the call's `instructions` and the entire `tools[]` list — the desktop does not choose them | `VoiceCallHarnessSessionResponse` fields 1-2 | PROVEN |
+| Tool descriptors are a name/description/JSON-schema triple — the OpenAI Realtime "function tool" shape | `VoiceCallToolDescriptor` | PROVEN for the shape; INFERRED for the Realtime attribution |
+| The server also supplies the **greeting**, its `direction`, and whether it should mention `landed_work` | `greeting #1` → `VoiceCallGreeting` | PROVEN |
+| Tool outcomes are a closed enum; the server validates names and arguments | `SERVED`, `UNKNOWN_TOOL`, `INVALID_INPUT` | PROVEN |
+| A tool call carries the **spoken `line`** alongside `input` — the harness knows what was said around it | field 5 | PROVEN |
+| The session reports whether the model `has_overheard` | field 3 | PROVEN |
+| A `receipt` couples a structured object to follow-up `instructions` | `VoiceCallReceipt` + `VoiceCallReceiptOutput` | PROVEN |
+| `VoiceCallLineState` tracks four conversational booleans | `they_just_talked`, `news_owed`, `receipt_owed`, `already_spoke_this_turn` | PROVEN |
+
+**INFERRED:** `news_owed` and `receipt_owed` are **conversational debt** flags, so the harness can decide each
+turn whether the bot owes the caller information (`news`) or an acknowledgement (`receipt`). With
+`already_spoke_this_turn` this is a turn-taking state machine, not a transcript buffer.
+
+## 6.3 The realtime transport
+
+```text
+MintSandVoiceCallSecretRequest|1 model 9
+MintSandVoiceCallSecretResponse|1 client_secret 9|2 expires_at_unix_seconds 3|3 model 9|4 websocket_url 9
+```
+
+```js
+// recon/beautified/main-app.beauty.js:99062-99069, verbatim
+var X$ = class e {
+  static DIALABLE_ORIGIN = "wss://api.x.ai/";
+  static isDialableURL(t) { return t.startsWith(e.DIALABLE_ORIGIN); }
+  static undialableHostError(t) { return `${t} is not the allowed Sand voice-call realtime endpoint.`; }
+};
+```
+
+| Fact | Evidence | Tag |
+|---|---|---|
+| Audio flows over a **WebSocket**, not WebRTC — `RTCPeerConnection`, `getUserMedia` and `MediaRecorder` appear **0 times** across all nine bundles | `websocket_url` field; grep counts | PROVEN |
+| The only permitted realtime origin is `wss://api.x.ai/`, matched by `startsWith` on the full string | `DIALABLE_ORIGIN`, `isDialableURL` | PROVEN |
+| Authentication is an **ephemeral `client_secret`** with a server-supplied expiry — the long-lived key never reaches the client | `MintSandVoiceCallSecretResponse` fields 1-2 | PROVEN |
+| The model id is chosen server-side and echoed back | request field 1 → response field 3 | PROVEN |
+| The endpoint is also probed in network diagnostics as `voice-realtime` | `99057`, `99364-99367` | PROVEN |
+
+> **Note (INFERRED).** `startsWith("wss://api.x.ai/")` includes scheme and trailing slash, so the two classic
+> bypasses fail: `wss://api.x.ai.evil.com/` (character after the host is `.`, not `/`) and
+> `wss://api.x.ai@evil.com/` (`@` follows). The check is safe as written but is a **string comparison rather
+> than a URL parse**, and it is *stricter* than a hostname check — `wss://api.x.ai:8443/` would also be
+> rejected.
+
+## 6.4 Presence, nudging, and the call record
+
+```js
+// recon/beautified/coordinator.beauty.js:34327-34346, abridged
+      setAgentVoice:        I().args({ id: q(), voiceId: A(at(p())), voiceSpeed: A(ne()), voiceLanguage: A(p()) }),
+      previewVoice:         I().args({ voiceId: p(), greetingId: p() }),
+      nudgeVoiceCall:       I().args({ id: q(), callId: p(), request: p(), spokenTurns: ae(p()) }),
+      recordVoiceCall:      I().args({ record: rK }),
+      setVoiceCallPresence: I().args({ id: q(), callId: p(), isOnTheLine: Z(), acceptsOverheard: A(Z()) }),
+      getVoiceCall:         I().args({ id: q(), callId: p() }),
+      readVoiceCallSentMessages: I().args(Tt),
+      transcribeAudio:      I().args(vK),
+```
+
+| Method | Auth | What it does | Tag |
+|---|---|---|---|
+| `setAgentVoice` | `person` | sets `voiceId`, `voiceSpeed`, `voiceLanguage`; backend mirror `SetGrokBotAgentVoiceRequest\|1 id 9\|2 voice_id 9?\|3 voice_speed 2?\|4 voice_language 9?` | PROVEN |
+| `previewVoice` | `person` | plays a sample identified by `{voiceId, greetingId}` — previews reuse real greeting audio | PROVEN for the shape; INFERRED for the reuse |
+| `nudgeVoiceCall` | **`background`** | injects a `request` into a live call with `spokenTurns[]` — a supervising agent can steer a call it is not on | PROVEN |
+| `recordVoiceCall` | `person` | commits a full call record | PROVEN |
+| `setVoiceCallPresence` | `person` | two distinct booleans: `isOnTheLine` (is the human on the call) and `acceptsOverheard` (may audio be captured) | PROVEN |
+| `getVoiceCall` | `person` | reads one call by `(agentId, callId)` | PROVEN |
+| `readVoiceCallSentMessages` | **`background`** | messages the agent sent **during** the call — the bridge from a live call back to the text thread | PROVEN |
+| `transcribeAudio` | (person) | `vK = w({audioBase64: NK, mimeType: p(), language: A(p())})` at `34168` — a **stateless, whole-utterance** transcription call | PROVEN |
+
+```js
+// recon/beautified/coordinator.beauty.js:34014-34049, abridged
+  Z$ = w({ id: p(), speaker: Ve(U("user"), U("assistant")), text: p(), atMs: ne() }),
+  X$ = w({ id: p(), request: p(), atMs: ne(), answer: at(p()), answeredAtMs: A(at(ne())),
+           direction: A(Ve(U("to-main"), U("to-voice"))),
+           cut: A(at(w({ atMs: ne(), heardMs: ne() }))) }),
+  Q$ = w({ kind: Ve(U("caller-speech-started"), U("caller-speech-stopped"), U("caller-interrupted"),
+                     U("agent-speech-started"), U("agent-speech-stopped"), U("response-create"),
+                     U("protocol-error")), atMs: ne(), … }),
+  eK = w({ id: p(), name: p(), argumentsJson: p(), atMs: ne(), result: at(w({ json: p(), atMs: ne() })) }),
+  tK = w({ id: p(), text: p(), atMs: ne() }),
+  rK = w({ callId: p(), agentId: q(), model: p(), realtimeConversationId: A(at(p())),
+           agentRequestId: A(p()), startedAtMs: ne(), endedAtMs: ne(), durationMs: ne(),
+           ending: Ve(U("hung-up"), U("disconnected"), U("failed")),
+           turns: ae(Z$), nudges: ae(X$), events: A(ae(Q$)), toolCalls: A(ae(eK)),
+           overheard: A(ae(tK)), harnessMayCollect: A(Z()) }),
+```
+
+| Fact | Evidence | Tag |
+|---|---|---|
+| A recorded call has **six parallel streams**: `turns`, `nudges`, `events`, `toolCalls`, `overheard`, plus scalars | `rK` | PROVEN |
+| Each turn is `{speaker: "user"\|"assistant", text, atMs}` — a diarised transcript, not raw audio | `Z$` | PROVEN |
+| Each nudge records its **direction** (`to-main`/`to-voice`), whether it was answered, and if cut off how much was `heardMs` of the cut point | `X$`, especially `cut: {atMs, heardMs}` | PROVEN |
+| VAD/endpointing is first-class: caller/agent speech start/stop, `caller-interrupted`, `response-create`, `protocol-error` | `Q$` | PROVEN |
+| `realtimeConversationId` ties the record to the vendor-side session (also a host setting, bounded to 128 chars) | `rK` field 4; `main-app.beauty.js:40663`; `main-core.beauty.js:18555` | PROVEN |
+| `harnessMayCollect` is a per-call recording-consent flag | `rK`; corroborated by `acceptsOverheard` | PROVEN |
+| Overheard content is stored **separately** from turns | `overheard[]` vs `turns[]` | PROVEN |
+| `ending` distinguishes a deliberate `hung-up` from `disconnected` and `failed` | `rK` | PROVEN |
+| There is a first-class **phone-call** tool distinct from a voice call | `firstPartySendTools: [{name:"phone_call", toolName:"place_phone_call"}, {name:"imessage", toolName:"SendIMessage"}]` at `main-app.beauty.js:50849-50852` | PROVEN |
+| Placing a phone call is approval-gated with copy naming the destination | `DmWmrW` = `"Place a phone call to ",["destination"]` | PROVEN |
+| Meetings are a *different* subsystem with their own transcript and a buffering recorder | `GrokBotMeetingTranscriptLine`, `AdminGetGrokBotMeetingTranscript`, and `GrokBotMeetingRequestLogJevCall` with `lines`, `request_line_count`, `earlier_line_count`, `handoff_index`, `cancel`, `cancel_threshold`, `forced`, `saved`, `decision` | PROVEN |
+| Six feature gates govern realtime voice: three per-client-surface gates, a steer kill-switch, and three `*_new_agent` variants | `glass_realtime_voice`, `web_realtime_voice`, `mobile_realtime_voice`, `realtime_voice_steer_kill_switch`, `glass/web/mobile_realtime_voice_new_agent` at `48699-48705` | PROVEN |
+| A fourth client surface exists beyond desktop/mobile | `GrokBotClientSurface :: UNSPECIFIED, DESKTOP, MOBILE, GLASS` | PROVEN |
+
+## 6.5 What distinguishes a voice call from a text thread
+
+| Dimension | Text thread | Voice call |
+|---|---|---|
+| Transport | coordinator RPC → backend | direct client↔`wss://api.x.ai/` with an ephemeral `client_secret` |
+| Other party | a prompt author | `turns[].speaker ∈ {user, assistant}` plus VAD events |
+| Steerability | `sendPrompt` (`person`) | `nudgeVoiceCall` (**`background`**) — a background agent can steer a live call |
+| Model | per-agent settings | server-minted per call session |
+| Tools | MCP servers + local tools | **server-supplied** `tools[]` for the call |
+| Recording | transcript entries in the agent transcript | a separate `recordVoiceCall` payload with six streams |
+| Consent | turn-level approvals | per-call `acceptsOverheard` + `harnessMayCollect` |
+| Cross-over | — | `readVoiceCallSentMessages` exposes call content to the thread |
+| Injection surface | user-authored text | **ambient audio from a third party who may not be the user** |
+
+> **Security assessment (INFERRED).** A voice call is a distinctly weaker-authority channel: content is
+> authored by whoever is on the line, it arrives as untrusted audio, there is no per-message approval gate,
+> and the bot is being instructed in real time. The mitigations present are real — a server-controlled tool
+> list (the model cannot invent tools), `UNKNOWN_TOOL`/`INVALID_INPUT` validation, and `nudgeVoiceCall` being
+> `background` so a supervisor can intervene — but the *authorization* boundary sits at the tools the session
+> was minted with, not at the utterance.
+
+---
+
+# 7. Channel integrations
+
+## 7.1 Platform inventory
+
+```text
+GrokBotAgentSessionKind :: UNSPECIFIED, MAIN, SLACK_DM, SLACK_THREAD, DM, GROUP, TEAMS_DM, TEAMS_THREAD, TEAMS_GROUP_CHAT
+GrokBotEmailProvider :: UNSPECIFIED, GOOGLE, MICROSOFT
+GrokBotEmailDirection :: UNSPECIFIED, INBOUND, OUTBOUND
+GrokBotEmailSearchMode :: UNSPECIFIED, HYBRID, KEYWORD, SEMANTIC
+GrokBotEmailBodyStatus :: UNSPECIFIED, AVAILABLE, NOT_INDEXED, PURGED, REJECTED
+GrokBotEmailAddressAvailability :: UNSPECIFIED, AVAILABLE, YOURS, TAKEN, INVALID, RESERVED, NOT_CONFIGURED
+GrokBotEmailSuppressionReason :: UNSPECIFIED, PERMANENT_BOUNCE, COMPLAINT, UNSUBSCRIBE_REQUEST, MANUAL
+```
+
+| Fact | Evidence | Tag |
+|---|---|---|
+| Two external platforms are modelled with per-surface session kinds: **Slack** (DM, thread) and **Microsoft Teams** (DM, thread, group chat) | `GrokBotAgentSessionKind` | PROVEN |
+| Generic `DM` and `GROUP` also exist — Grok Bot's own conversations | idem | PROVEN |
+| **Email** is modelled with two providers, both directions, and a local-part allocation concept | the `GrokBotEmail*` enums | PROVEN |
+| Email has a suppression list with standard reasons | `GrokBotEmailSuppressionReason` | PROVEN |
+| **GitHub** has a **GitHub App** installation flow, not plain OAuth — the args include `installationId` and `setupAction` | `completeGithubConnect: I().args({state, code?, installationId?, setupAction?, error?})` at `main-app.beauty.js:41136-41142` | PROVEN |
+| **iMessage** is a first-party send channel | `{name:"imessage", toolName:"SendIMessage"}` at `50851`; the macOS Messages worker reads `chat.db` (`FINDINGS.md:118-120`) | PROVEN |
+| **Phone calls** are a first-party send channel | `50850` | PROVEN |
+| **Discord** is marked "coming soon" in the shipped strings | `8feLum` = `"Message in Discord servers and DMs (coming soon)"` | PROVEN |
+| Slack and Teams are **also** labelled "coming soon" in one string each, despite complete client code | `y54UoK`, `mszXTG` | PROVEN |
+| A fourth UI list of integration names exists for a different feature | `Lne = ["figma","slack","linear","notion-workspace"]` at `49534` | PROVEN |
+
+> **Apparent contradiction.** `GrokBotAgentSessionKind` models Slack/Teams session kinds in detail and
+> `GrokBotSlack*` models a full install lifecycle, yet UI strings say "coming soon". **INFERRED:** the shipped
+> string catalog lags capability (compiled `.po` files are not pruned), or these channels are server-gated
+> while the client is complete. The client side is clearly finished: `grok-bot-slack-dialog-live.js` ships,
+> and `GrokBotSlackInstallOutcome` has 13 outcomes including `RATELIMITED`, `SLACK_REJECTED`,
+> `INSUFFICIENT_SCOPES`, `PENDING_ADMIN_APPROVAL` and `WORKSPACE_NOT_ALLOWED`.
+
+## 7.2 Coordinator methods
+
+```js
+// recon/beautified/main-app.beauty.js:41129-41142 and 41231-41234, abridged
+          getListenerIntegrations: I().noArgs,
+          getListenerConnectUrl: I().args({ platform: (0, p.rpcString)(),
+            forceOauth: (0, p.rpcOptional)((0, p.rpcBoolean)()), oauthRedirectUri: XFe }),
+          disconnectListenerPlatform: I().args({ platform: (0, p.rpcString)() }),
+          completeGithubConnect: I().args({ state, code?, installationId?, setupAction?, error? }),
+          getAgentChannels: I().args(Yo),
+          connectChannel: I().args({ ...O5, token: (0, p.rpcString)() }),
+          disconnectChannel: I().args(O5),
+          refreshChannel: I().args(O5),
+```
+
+| Method | Auth | Args | Evidence |
+|---|---|---|---|
+| `getAgentChannels` | `person` | `Yo` (shared agent-id object) | `74303`, `41231` |
+| `connectChannel` | person | channel descriptor `O5` **plus a `token`** | `41232` |
+| `disconnectChannel` / `refreshChannel` | person | `O5` | `41233-41234` |
+| `getListenerIntegrations` | `person` | none → reply `record` | `41129`, `74244`; `coordinator.beauty.js:32831`, `34312`, `36916` |
+| `getListenerConnectUrl` | `person` | `{platform, forceOauth?, oauthRedirectUri}` | `41130-41134` |
+| `disconnectListenerPlatform` | `person` | `{platform}` | `41135` |
+| `completeGithubConnect` | `person` | `{state, code?, installationId?, setupAction?, error?}` | `41136-41142` |
+
+## 7.3 What a "listener" is
+
+| Concept | Meaning | Evidence | Tag |
+|---|---|---|---|
+| **Channel** | an *outbound* destination bound to **one agent** — `connectChannel` requires a `token` and `refreshChannel` re-validates it | the three channel methods; `storeSecret`'s `{kind:"channel-credential", platform, field}` target at `coordinator.beauty.js:34216-34218` | PROVEN for the shape; INFERRED for "outbound" |
+| **Listener** | an *inbound* integration bound to the **platform/account**, not to one agent — `getListenerIntegrations` takes no agent id and `disconnectListenerPlatform({platform})` is platform-scoped | `main-app.beauty.js:41129-41135` | PROVEN |
+| The connect flow can be forced through OAuth and accepts a caller-supplied redirect URI | `getListenerConnectUrl` args | PROVEN |
+| A listener connect can fail in a way that leaves the bot unable to resume | key `caw2Vm` = `"Bot failed to resume after listener connect"` | PROVEN |
+| Whether a listener is a webhook receiver, a poller, or a broker subscription | — | **UNKNOWN** |
+
+### Slack / Teams install lifecycle
+
+```text
+GrokBotSlackInstallStatus    :: NOT_CONNECTED, APP_CREATED, CONNECTED, UNSUPPORTED_HARNESS
+GrokBotSlackInstallOutcome   :: INSTALLED, PENDING_ADMIN_APPROVAL, NOT_CONNECTED, WORKSPACE_REQUIRED,
+                                MANAGER_REAUTH_REQUIRED, INSUFFICIENT_SCOPES, INSTALL_CONFLICT, RATELIMITED,
+                                SLACK_REJECTED, UNSUPPORTED_HARNESS, NOT_PUBLISHED, WORKSPACE_NOT_ALLOWED
+GrokBotSlackReinstallOutcome :: UPDATED, UP_TO_DATE, RECREATE_REQUIRED, PENDING_ADMIN_APPROVAL, NOT_CONNECTED,
+                                MANAGER_REAUTH_REQUIRED, INSUFFICIENT_SCOPES, RATELIMITED, SLACK_REJECTED,
+                                UNSUPPORTED_HARNESS, THROTTLED
+GrokBotSlackConnectOutcome   :: STARTED, UNSUPPORTED_HARNESS, NOT_PUBLISHED
+GrokBotSlackConnectFailureKind :: CANCELLED, ORG_INSTALL, WRONG_CURSOR_ACCOUNT, INCOMPLETE
+GrokBotSlackUninstallOutcome :: REMOVED, NOT_CONNECTED, MANAGER_REAUTH_REQUIRED, RATELIMITED, SLACK_REJECTED, UNSUPPORTED_HARNESS
+GrokBotTeamsInstallState     :: NOT_CONNECTED, CONNECTED, APP_CREATED, PENDING_ADMIN_APPROVAL, INSTALLED,
+                                UPDATE_PENDING, REMOVED_IN_TEAMS, REMOVED, UNSUPPORTED_HARNESS, NOT_PUBLISHED, UNAVAILABLE
+```
+
+| Fact | Evidence | Tag |
+|---|---|---|
+| Grok Bot **creates its own Slack app** in the workspace (`APP_CREATED` precedes `CONNECTED`) rather than asking the customer to install a pre-existing app | state ordering | PROVEN for states; INFERRED for the flow |
+| Reinstall can require **recreating** the app | `RECREATE_REQUIRED` | PROVEN |
+| The integration is tied to a specific Grok Bot account — wrong account is a distinct failure | `WRONG_CURSOR_ACCOUNT` | PROVEN |
+| Org-wide installs are a special case that can be refused | `ORG_INSTALL` | PROVEN |
+| Workspaces can be disallowed server-side | `WORKSPACE_NOT_ALLOWED` | PROVEN |
+| The Slack connect form collects **`app id`**, **`bot token`** and **`app token`** | i18n keys `ndxqGN`, `qWvCPP`, `hN+ReX`; UI chunk `grok-bot-slack-dialog-live.js` | PROVEN |
+| Slack messaging requires a validated channel **address** | `WP+7HZ` = `"\"",["address"],"\" isn't a valid channel address, so that message wasn't delivered"` | PROVEN |
+| Delivery failures are reported with platform name + technical detail | `XdaOH0`; `beZty6` = *"…isn't connected on this computer, so that message wasn't delivered. Connect [platform] (add its token) to send there."* | PROVEN |
+| Channel messaging can be unavailable on a given machine, as a handled state | `QS9fR1` = `"Channel messaging isn't available on this computer, so that message wasn't delivered"` | PROVEN |
+| Follow-up turns from channel messages are tracked separately | `Z1AYSG` `"Channel message follow-up failed"`; `6W/ZQ/` `"Broadcast message failed"` | PROVEN |
+
+### Outbound-send classification
+
+```js
+// recon/beautified/main-app.beauty.js:50809-50860, abridged (grok_bot_external_send_labeling_config fallback)
+            connectors: [
+              { name: "slack",   hosts: ["mcp.slack.com"], sendTools: ["slack_send_message", "slack_schedule_message"] },
+              { name: "gmail",   hosts: ["gmailmcp.googleapis.com", "api.cursor.com"],
+                sendTools: ["send_message","reply","forward","send_email","send_draft"] },
+              { name: "outlook", hosts: ["api.cursor.com/rest-mcp/outlook"],
+                sendTools: ["send_mail","reply_to_mail_message","forward_mail_message","send_draft"] },
+              { name: "google_calendar", hosts: ["calendarmcp.googleapis.com","api.cursor.com"],
+                sendTools: ["create_event","update_event"], participants: {...}, ownerArgs: ["calendarId"] },
+              { name: "outlook_calendar", hosts: ["api.cursor.com"],
+                sendTools: ["create_calendar_event","update_calendar_event"], participants: {...} },
+              { name: "google_drive_share", hosts: ["drivemcp.googleapis.com","api.cursor.com"],
+                sendTools: ["share_file","google_drive_share_file"] },
+              { name: "teams",   hosts: ["api.cursor.com"],
+                sendTools: ["send_chat_message","send_channel_message","reply_to_channel_message"] },
+            ],
+            firstPartySendTools: [
+              { name: "phone_call", toolName: "place_phone_call" },
+              { name: "imessage",   toolName: "SendIMessage" },
+            ],
+            labelAutoReviewSends: !1, autoReviewSendsSampleRate: 0,
+            subagentCommitOutcomeSampleRate: 0.01, unsentSampleRate: 0,
+            skipSubagentDelegation: !1, lowStakesReviewedSampleRate: 1,
+```
+
+| Fact | Evidence | Tag |
+|---|---|---|
+| "Sending" is defined **per connector as a list of tool names**, not by a heuristic | the `sendTools` arrays | PROVEN |
+| The mapping is server-configurable (it lives in a `fallbackValues` block with `sampleRate`) | the enclosing gate object | PROVEN |
+| Calendar events have an explicit notion of **participants** and **owner**, with several accepted spellings for the same concept (`attendees`, `attendeeEmails`, `addedAttendees`, `addedAttendeeEmails`, `addAttendees`) — a hedge against MCP schema drift | `participants.args`, `ownerArgs` | PROVEN |
+| Sending is **not** auto-labelled by default | `labelAutoReviewSends: !1`, `autoReviewSendsSampleRate: 0` | PROVEN |
+| An auto-review sampling pipeline over agent commits exists | `subagentCommitOutcomeSampleRate: 0.01`, `lowStakesReviewedSampleRate: 1`; `resolveAutoReviewApproval`; `GrokBotAutoReviewApprovalResolution` | PROVEN |
+
+> **INFERRED (design intent).** This config is the mechanism behind "the bot messages people on your behalf"
+> appearing in a review queue rather than happening silently: external *sends* are enumerated by tool name so
+> they can be labelled, sampled and gated by auto-review, while *reads* are not.

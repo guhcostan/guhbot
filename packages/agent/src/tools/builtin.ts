@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
-import { readdir, readFile, realpath, stat, writeFile } from 'node:fs/promises';
-import { isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { mkdir, readdir, readFile, realpath, stat, writeFile } from 'node:fs/promises';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { promisify } from 'node:util';
 import type { ToolDefinition, ToolExecutionContext } from '../types.js';
 
@@ -65,8 +65,14 @@ export async function resolveInside(root: string, candidate: string): Promise<st
   }
 
   // Walk up to the nearest ancestor that exists and canonicalise it.
+  //
+  // The walk stops at the jail root rather than continuing to the filesystem
+  // root. Otherwise a working directory that does not exist yet (an agent
+  // writing its first file) walks past the root, finds an ancestor that is
+  // legitimately outside the jail, and rejects a path that is perfectly legal.
   let probe = target;
   for (;;) {
+    if (probe === rootAbs) break;
     try {
       const real = await realpath(probe);
       if (real !== rootReal && !real.startsWith(rootReal + sep)) {
@@ -236,6 +242,9 @@ export function builtinTools(options: BuiltinToolOptions = {}): ToolDefinition[]
         const args = asObject(rawArgs);
         const target = await resolveInside(ctx.cwd, requireString(args, 'path'));
         const content = requireString(args, 'content');
+        // Create parent directories. Resolving first means the path has already
+        // been checked against the jail, so mkdir cannot escape it either.
+        await mkdir(dirname(target), { recursive: true });
         await writeFile(target, content, 'utf8');
         return `Wrote ${content.length} characters to ${relative(ctx.cwd, target)}.`;
       },

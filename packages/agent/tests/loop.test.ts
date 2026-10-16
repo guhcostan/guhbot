@@ -290,7 +290,16 @@ describe('path jailing', () => {
     await expect(resolveInside(dir, '/etc/passwd')).rejects.toThrow(/escapes the working directory/);
   });
 
-  it('refuses a symlink that points outside the root', async () => {
+  it('allows a path inside a directory that does not exist yet', async () => {
+    // Regression: a working directory that has not been created yet made the
+    // canonical walk climb past the jail root and reject a legal path, which
+    // broke an agent writing its very first file.
+    const nested = join(dir, 'fresh-workspace');
+    await expect(resolveInside(nested, 'notes/todo.md')).resolves.toBe(join(nested, 'notes', 'todo.md'));
+    await expect(resolveInside(nested, 'a/b/c/d.txt')).resolves.toBe(join(nested, 'a', 'b', 'c', 'd.txt'));
+  });
+
+  it('still refuses a symlink that points outside the root', async () => {
     const outside = mkdtempSync(join(tmpdir(), 'guhbot-outside-'));
     writeFileSync(join(outside, 'secret.txt'), 'secret');
     symlinkSync(outside, join(dir, 'link'));
