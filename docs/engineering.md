@@ -52,6 +52,10 @@ Rules that keep this honest:
 - NodeNext modules, `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `verbatimModuleSyntax`.
 - **Relative imports end in `.js`** even from `.ts` sources. Node requires it and
   `verbatimModuleSyntax` makes it mandatory.
+- **Exception: `apps/mobile` uses extensionless relative imports.** Metro appends
+  its own platform extensions to the full specifier, so `./x.js` never resolves
+  to `./x.tsx` on a device. The mobile `tsconfig` uses `moduleResolution:
+  bundler`, which accepts extensionless imports; every other package keeps `.js`.
 - Use `import type` for type-only imports.
 - `exactOptionalPropertyTypes` means `{ a?: string }` does not accept
   `{ a: undefined }`. Either widen the type to `string | undefined` or omit the
@@ -103,16 +107,46 @@ be manipulated by content it reads.
 
 ## How to add a capability
 
-A capability package is usually three things:
+A capability is one package exporting `createXCapability(options) => Capability`,
+and it may contribute exactly four kinds of thing:
 
-1. A **tool set**: `(options) => ToolDefinition[]` from `@guhbot/agent`. Read-only
-   tools set `requiresApproval: false`; anything that mutates sets `true`.
-2. **State**, if it needs any: a table plus methods in `host-core/src/store.ts`.
-3. **RPC methods**, if a client needs to configure or observe it: a spec in
-   `protocol/src/methods.ts` with an explicit `authz` class and a summary, plus a
-   handler in the `HANDLERS` table in `host-core/src/host.ts`.
+1. **Tools** — `tools: () => ToolDefinition[]`, the set the model can call. A tool
+   that mutates anything outside the host's own data, sends something outward or
+   spends money sets `requiresApproval: true`. A tool only ever writes inside this
+   host's own store, is bounded, and is undoable by a human, does not.
+2. **RPC methods** — `methods: Record<string, ContributedMethod>`, each carrying
+   its own `authz` class, input schema, output schema and summary. Declare them in
+   your own package: `protocol/src/methods.ts` is for *core* methods, and a
+   capability that needs to edit it has been given too much. `authz` is the whole
+   security model — if it mutates durable state, sends something outward, spends
+   money or resolves an approval, it is `person`. A capability that tries to
+   contribute a name the core registry already owns is refused at boot.
+3. **A status flag** — `flags: { memory: true }`, merged into
+   `host.status.capabilities` so a client can tell what this host really has
+   instead of assuming.
+4. **Prompt text** — `contextSections: (context) => string | null`, extra system
+   prompt read once per run. Use it when the model should not have to spend a tool
+   call to know something. Two rules: it must be cheap, because it runs while a
+   run is assembled; and its text is untrusted, because it usually came from a
+   model or a page, so flatten it and frame it as data. It must never be able to
+   read as instructions.
 
-Do not add a fifth kind of thing.
+Those are the only four.
+
+**State.** `@guhbot/host-core` owns every durable write, and a capability may not
+open a second database, add a table or write SQL. If your capability needs to
+persist something, use the public `Store` API — `getMeta`/`setMeta` for a small,
+capability-owned blob, or a new typed table in `host-core/src/store.ts` if it
+deserves one. Take the store through a getter (`store: () => host.store`): the
+host is constructed with your capability already in hand, so the store does not
+exist yet at construction time. Write down what the storage choice costs — see
+the header of `packages/memory/src/store.ts` for the worked example.
+
+**Approvals.** A credential, or any other value that leaves the host, must leave
+through a function called from inside a tool execution — never through a method,
+and never as a return value. `packages/credentials` is the worked example: no
+method or tool returns a value, and the release path re-checks the approval after
+suspending, so a revocation wins a race it would otherwise lose.
 
 ## Commands
 

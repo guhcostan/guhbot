@@ -38,7 +38,7 @@ for a subscription should not need an API key.
 | Many agents in one thread, passing work | ✅ | ✅ | ⚠️ protocol only |
 | Transcript with resync after a disconnect | ✅ | ✅ | ✅ |
 | Subagents / async tasks | ✅ | ✅ | ❌ |
-| Memory that persists and improves across runs | ✅ | ✅ | ✅ facts persist; no self-editing of the agent's own instructions |
+| Memory that persists and improves across runs | ✅ | ✅ | ✅ facts persist and are recalled into the prompt; no self-editing of the agent's own instructions |
 
 ## Local execution
 
@@ -152,8 +152,12 @@ lands.
    direct integrations are another.
 10. ~~**Memory**~~ — done. `packages/memory` gives each agent capped, ranked facts
     it writes with `memory_remember` and recalls with `memory_recall`; the human
-    reads and deletes them from a client. An agent cannot label a fact as
-    user-stated, which is the only source that can retire other facts.
+    reads and deletes them from a client. Recall also reaches the run's system
+    prompt through the capability `contextSections` hook, so an agent does not
+    have to spend a tool call asking what it already knows — verified with a live
+    model: a fact stored in one run was used in the next with no recall call. An
+    agent cannot label a fact as user-stated, which is the only source that can
+    retire other facts.
 11. **Evals** — measure whether the agent is any good, not only whether the code
     is correct.
 12. **Docker and a hosted deployment for 24/7** — the part AWS is for.

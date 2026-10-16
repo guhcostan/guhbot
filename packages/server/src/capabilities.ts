@@ -6,7 +6,7 @@ import { createMemoryCapability } from '@guhbot/memory';
 import { createMessagesCapability } from '@guhbot/messages';
 import { createSchedulerCapability } from '@guhbot/scheduler';
 import { collectContributions, prepareCapabilities, type Capability, type ToolDefinition } from '@guhbot/agent';
-import type { ContributedMethod, Host } from '@guhbot/host-core';
+import type { ContributedMethod, Host, RunContext } from '@guhbot/host-core';
 
 /**
  * Capability mounting.
@@ -71,6 +71,8 @@ export interface MountedCapabilities {
   flags: Record<string, boolean>;
   /** Handed to the agent loop. */
   tools: ToolDefinition[];
+  /** Handed to the agent loop: extra system-prompt text, read once per run. */
+  contextSections: Array<(context: RunContext) => string | null>;
   /** Registered alongside the core methods. */
   extraMethods: Record<string, ContributedMethod>;
   /** Names of capabilities that were mounted, for logs and diagnostics. */
@@ -84,6 +86,7 @@ const EMPTY: MountedCapabilities = {
   capabilities: [],
   flags: {},
   tools: [],
+  contextSections: [],
   extraMethods: {},
   mounted: [],
   notes: [],
@@ -193,12 +196,13 @@ export async function mountCapabilities(config: CapabilityMountConfig): Promise<
     notes.push(`capability ${name} failed to prepare: ${error instanceof Error ? error.message : String(error)}`);
   });
 
-  const { tools, extraMethods, flags } = collectContributions(capabilities);
+  const { tools, extraMethods, flags, contextSections } = collectContributions(capabilities);
 
   return {
     capabilities,
     flags,
     tools,
+    contextSections,
     extraMethods,
     mounted: capabilities.map((c) => c.name),
     notes,

@@ -33,6 +33,15 @@ export interface LoopOptions {
   maxToolCalls?: number;
   maxTokensPerTurn?: number;
   temperature?: number;
+  /**
+   * Extra system-prompt text contributed by capabilities, each returning a
+   * block or null for nothing.
+   *
+   * Read once per run, when the prompt is assembled — not once per turn. A
+   * capability may write while answering (memory marks a recalled fact as used),
+   * so calling it inside the turn loop would mean a durable write per model turn.
+   */
+  contextSections?: readonly ((context: RunContext) => string | null)[];
   /** Called for every provider request, for tests and tracing. */
   onRequest?: (messages: ChatMessage[]) => void;
   now?: () => number;
@@ -73,6 +82,9 @@ export class AgentLoop implements RunExecutor {
     const maxTurns = this.options.maxTurns ?? 24;
     const maxToolCalls = this.options.maxToolCalls ?? 64;
     const messages = this.buildInitialMessages(context);
+    // Built once, outside the loop: nothing in it varies between turns, and a
+    // capability's section may write when it answers.
+    const system = this.systemPrompt(context);
 
     let turns = 0;
     let toolCalls = 0;
@@ -95,7 +107,7 @@ export class AgentLoop implements RunExecutor {
           model: context.agent.model ?? this.options.provider.defaultModel,
           messages,
           tools: this.options.tools,
-          system: this.systemPrompt(context),
+          system,
           maxTokens: this.options.maxTokensPerTurn ?? 8192,
           temperature: this.options.temperature ?? 0.2,
           signal,
@@ -296,6 +308,20 @@ export class AgentLoop implements RunExecutor {
     const instructions = context.agent.instructions.trim();
     if (instructions.length > 0) {
       lines.push('', 'Your operating instructions from the user:', instructions);
+    }
+    // Capability sections come last, and each is framed by the capability that
+    // produced it. A section that throws is dropped rather than failing the run:
+    // a capability's extra context is an enhancement, and losing it is not a
+    // reason to refuse work the user asked for.
+    for (const section of this.options.contextSections ?? []) {
+      let text: string | null = null;
+      try {
+        text = section(context);
+      } catch {
+        text = null;
+      }
+      const trimmed = text?.trim() ?? '';
+      if (trimmed.length > 0) lines.push('', trimmed);
     }
     return lines.join('\n');
   }

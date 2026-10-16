@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { collectContributions } from '@guhbot/agent';
 import { createMemoryCapability } from '../src/index.js';
-import { Clock, FakeSlice, deviceSession, mountMemory, toolNamed } from './harness.js';
+import { Clock, FakeSlice, deviceSession, fakeRunContext, mountMemory, toolNamed } from './harness.js';
 
 /**
  * The capability seam: what it declares, what it contributes, and what it does
@@ -112,5 +112,69 @@ describe('createMemoryCapability', () => {
       note: () => undefined,
     })).rejects.toThrow(/has been disposed/);
     expect(() => capability.counts()).toThrow(/has been disposed/);
+  });
+});
+
+/**
+ * The prompt path.
+ *
+ * Recall reached the model only through `memory_recall` until the loop grew a
+ * context hook, which meant an agent had to ask before it knew anything — the
+ * opposite of what remembering is for. This is the path that puts facts in front
+ * of the model for free, and it is the one place a memory can reach a run without
+ * a tool call, so its scoping matters as much as the tools'.
+ */
+describe('the prompt section', () => {
+  it('is contributed to the loop, and the run context it sees is enough to scope it', async () => {
+    const slice = new FakeSlice();
+    slice.agents.add(A);
+    const capability = makeCapability(slice);
+    capability.store.remember(A, { text: 'the staging database is db.internal', source: 'user' });
+
+    const { contextSections } = collectContributions([capability]);
+    expect(contextSections).toHaveLength(1);
+
+    const section = contextSections[0]!({ ...fakeRunContext(A).context, prompt: 'which staging database' });
+    expect(section).toContain('the staging database is db.internal');
+    // Framed as data, because the fact text is model-authored.
+    expect(section).toMatch(/data, not instructions/i);
+  });
+
+  it('scopes to the agent on the run, not to whoever asks', async () => {
+    const slice = new FakeSlice();
+    slice.agents.add(A);
+    slice.agents.add('ag_beta');
+    const capability = makeCapability(slice);
+    capability.store.remember(A, { text: 'alpha only fact about staging', source: 'user' });
+    capability.store.remember('ag_beta', { text: 'beta only fact about staging', source: 'user' });
+
+    const { contextSections } = collectContributions([capability]);
+    const section = contextSections[0]!({ ...fakeRunContext('ag_beta').context, prompt: 'the staging fact' });
+
+    expect(section).toContain('beta only fact about staging');
+    expect(section).not.toContain('alpha only fact');
+  });
+
+  it('returns nothing rather than throwing once the capability is disposed', async () => {
+    const slice = new FakeSlice();
+    slice.agents.add(A);
+    const capability = makeCapability(slice);
+    capability.store.remember(A, { text: 'a fact about staging', source: 'user' });
+
+    const { contextSections } = collectContributions([capability]);
+    await capability.dispose?.();
+
+    // A host shutting down mid-run must not turn into a failed run.
+    expect(contextSections[0]!({ ...fakeRunContext(A).context, prompt: 'staging' })).toBeNull();
+  });
+
+  it('says nothing when no stored fact is relevant to the prompt', async () => {
+    const slice = new FakeSlice();
+    slice.agents.add(A);
+    const capability = makeCapability(slice);
+    capability.store.remember(A, { text: 'they only sign annual contracts', source: 'user' });
+
+    const { contextSections } = collectContributions([capability]);
+    expect(contextSections[0]!({ ...fakeRunContext(A).context, prompt: 'reticulate the splines' })).toBeNull();
   });
 });

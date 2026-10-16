@@ -276,6 +276,9 @@ async function main(): Promise<void> {
               : {}),
           }),
           tools: [...builtinTools({ allowedHosts: egressHosts }), ...mounted.tools],
+          // What a capability wants in front of the model without spending a
+          // tool call on it — memory's recall, for instance.
+          contextSections: mounted.contextSections,
           // Defaulting to the current directory would hand an agent whatever
           // repository you happened to launch the host from, node_modules and
           // all. A dedicated workspace is the safe default; pointing it at a

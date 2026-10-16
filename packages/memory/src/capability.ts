@@ -113,6 +113,22 @@ export function createMemoryCapability(options: MemoryCapabilityOptions): Memory
     flags: { memory: true },
     tools: () => tools,
     methods,
+    /**
+     * Recall facts into the run's system prompt, so an agent does not start cold.
+     *
+     * This path has exact agent identity, unlike the tools: `RunContext` carries
+     * the agent the run belongs to, so there is no ladder to climb and no way to
+     * read another agent's facts. The query is the prompt being answered, which
+     * is the best available signal for what this run is about.
+     *
+     * The loop reads this once per run, not once per turn, which matters because
+     * recall writes: it stamps `lastUsedAt` and increments `useCount` on the
+     * facts it returns, and that is a durable write.
+     *
+     * A disposed capability contributes nothing rather than throwing, so shutting
+     * a host down mid-run does not turn into a failed run.
+     */
+    contextSections: (context) => (disposed ? null : store.promptSection(context.agent.id, context.prompt)),
     dispose: async () => {
       // Idempotent by construction: the flag is the entire state, and setting it
       // twice is the same as setting it once.

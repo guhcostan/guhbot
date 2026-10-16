@@ -408,3 +408,95 @@ describe('builtin tools', () => {
     ).rejects.toThrow(/only http and https/);
   });
 });
+
+/**
+ * Capability context sections.
+ *
+ * A capability may put text in front of the model without spending a tool call
+ * on it. The property that matters is how often it is read: recall writes as it
+ * answers, so a per-turn read would be a durable write per model turn.
+ */
+describe('capability context sections', () => {
+  const script = (): ScriptedProvider =>
+    new ScriptedProvider([
+      [{ type: 'text-delta', text: 'done' }, { type: 'stop', reason: 'end' }],
+    ]);
+
+  it('appends a section to the system prompt, after the user instructions', async () => {
+    const provider = script();
+    const loop = new AgentLoop({
+      provider,
+      tools: [],
+      cwd: dir,
+      contextSections: [() => 'Facts you wrote down earlier:\n- [agent] staging needs the VPN'],
+    });
+
+    await loop.execute(fakeContext().context, new AbortController().signal);
+
+    const system = provider.requests[0]?.system ?? '';
+    expect(system).toContain('staging needs the VPN');
+    // The user's own instructions stay authoritative, so they come first.
+    expect(system.indexOf('Be terse.')).toBeLessThan(system.indexOf('staging needs the VPN'));
+  });
+
+  it('reads each section exactly once per run, however many turns it takes', async () => {
+    let reads = 0;
+    const provider = new ScriptedProvider([
+      [
+        { type: 'tool-call', call: { id: 'c1', name: 'echo', arguments: { text: 'hi' }, rawArguments: '{"text":"hi"}', parseError: null } },
+        { type: 'stop', reason: 'tool-calls' },
+      ],
+      [{ type: 'text-delta', text: 'done' }, { type: 'stop', reason: 'end' }],
+    ]);
+    const loop = new AgentLoop({
+      provider,
+      tools: [echoTool],
+      cwd: dir,
+      contextSections: [
+        () => {
+          reads += 1;
+          return 'recalled once';
+        },
+      ],
+    });
+
+    await loop.execute(fakeContext().context, new AbortController().signal);
+
+    // Two model turns happened …
+    expect(provider.requests).toHaveLength(2);
+    // … and the section was built once, not once per turn.
+    expect(reads).toBe(1);
+    // Every turn still carried it, because the prompt is built once and reused.
+    expect(provider.requests.every((r) => r.system.includes('recalled once'))).toBe(true);
+  });
+
+  it('drops a section that returns nothing and one that throws', async () => {
+    const provider = script();
+    const loop = new AgentLoop({
+      provider,
+      tools: [],
+      cwd: dir,
+      contextSections: [
+        () => null,
+        () => '   ',
+        () => {
+          throw new Error('this capability is having a bad day');
+        },
+        () => 'the one that survived',
+      ],
+    });
+
+    // An enhancement failing is not a reason to fail the run the user asked for.
+    await expect(loop.execute(fakeContext().context, new AbortController().signal)).resolves.toBeUndefined();
+    const system = provider.requests[0]?.system ?? '';
+    expect(system).toContain('the one that survived');
+    expect(system).not.toContain('bad day');
+  });
+
+  it('carries no section when no capability contributes one', async () => {
+    const provider = script();
+    const loop = new AgentLoop({ provider, tools: [], cwd: dir });
+    await loop.execute(fakeContext().context, new AbortController().signal);
+    expect(provider.requests[0]?.system).toContain('Working directory:');
+  });
+});

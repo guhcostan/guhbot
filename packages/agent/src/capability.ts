@@ -1,4 +1,4 @@
-import type { ContributedMethod } from '@guhbot/host-core';
+import type { ContributedMethod, RunContext } from '@guhbot/host-core';
 import type { ToolDefinition } from './types.js';
 
 /**
@@ -59,6 +59,28 @@ export interface Capability {
 
   /** Tools contributed to every agent run. Called after `ready` has resolved. */
   readonly tools?: () => ToolDefinition[];
+  /**
+   * Text this capability wants in a run's system prompt, or null for nothing.
+   *
+   * The hook exists so a capability can put something in front of the model
+   * without spending a tool call on it. Memory is the motivating case: a run that
+   * has to call `memory_recall` before it knows anything starts cold by design,
+   * and the point of remembering is not having to ask.
+   *
+   * Two rules, both load-bearing:
+   *
+   *  - **Cheap, and no surprises.** This runs while a run is being assembled, so
+   *    anything it writes is written for every run that mounts the capability.
+   *    The loop builds the prompt once per run, not once per turn, for exactly
+   *    this reason.
+   *  - **The text is untrusted.** It usually originates from a model or a page it
+   *    read, so frame it as data and flatten it; it must not be able to look like
+   *    instructions of its own. `MemoryStore.promptSection` is the worked example.
+   *
+   * `RunContext` carries `agent` and `prompt`, which is how a capability knows
+   * both whose run this is and what it is about.
+   */
+  readonly contextSections?: (context: RunContext) => string | null;
   /**
    * RPC methods contributed to the host. Each entry must also be reachable by
    * name from a client, so give it a descriptive, namespaced name
@@ -136,10 +158,12 @@ export function collectContributions(capabilities: Capability[]): {
   tools: ToolDefinition[];
   extraMethods: Record<string, ContributedMethod>;
   flags: Record<string, boolean>;
+  contextSections: Array<(context: RunContext) => string | null>;
 } {
   const tools: ToolDefinition[] = [];
   const extraMethods: Record<string, ContributedMethod> = {};
   const flags: Record<string, boolean> = {};
+  const contextSections: Array<(context: RunContext) => string | null> = [];
   const seenTools = new Set<string>();
 
   for (const capability of capabilities) {
@@ -157,8 +181,9 @@ export function collectContributions(capabilities: Capability[]): {
       }
       extraMethods[name] = spec;
     }
+    if (capability.contextSections !== undefined) contextSections.push(capability.contextSections);
     Object.assign(flags, capability.flags ?? {});
   }
 
-  return { tools, extraMethods, flags };
+  return { tools, extraMethods, flags, contextSections };
 }

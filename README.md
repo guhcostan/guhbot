@@ -9,7 +9,7 @@ your files, your shell and your browser — and every operation they can perform
 classified by whether it needs a human present.
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-67e8a2?style=flat-square)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-841%20passing-67e8a2?style=flat-square)](#testing)
+[![Tests](https://img.shields.io/badge/tests-851%20passing-67e8a2?style=flat-square)](#testing)
 [![Node](https://img.shields.io/badge/node-%E2%89%A522.5-339933?style=flat-square&logo=nodedotjs&logoColor=white)](#quick-start)
 
 [Website](https://d1490grrgfw1sj.cloudfront.net) · [Security](SECURITY.md) · [Architecture](docs/architecture.md) · [Reverse-engineering dossier](docs/re/00-index.md)
@@ -69,7 +69,7 @@ Nothing reaches the network unless you configured what it may reach.
 | Desktop app | ✅ | Electron shell with an embedded host, hardened window, no remote script |
 | Canvas | ✅ | Model-authored HTML, content-addressed, own CSP, frame with no same-origin access |
 | Automations | ✅ | Cron with DST handled, webhooks with sealed revocable secrets, coalesced catch-up |
-| Agent memory | ✅ | Short facts an agent writes down and recalls later. Per-agent, capped, ranked by use, and readable and deletable by the human |
+| Agent memory | ✅ | Short facts an agent writes down and recalls on a later run — recalled into the prompt, so a run does not have to ask first. Per-agent, capped, and readable and deletable by the human |
 | Site credentials | ⚠️ | Per-origin approval, sealed at rest, released only from inside a tool execution. The vault is mounted and tested; the browser does not consume it yet |
 | Reachable from a phone | ✅ | `--companion` binds the network; the runtime itself never opens a socket |
 | Mobile app | ⚠️ | Complete and typechecked; the React Native bundle has not been run on a device |
@@ -148,6 +148,8 @@ apps/cloud          Hosted gateway, one host per   ─┼─ speak @guhbot/proto
                     tenant, plus the waitlist       ┘   WebSocket to a host
                                                           │
 packages/server     HostServer + GuhbotClient ────────────┤  the only thing that binds a socket
+                      (the --companion transport lives inside this
+                      package's own dependency closure)
 packages/host-core  Runtime, store, authorization, approvals
 packages/agent      Model loop, providers, tools, capabilities
 packages/protocol   The wire contract. Depends on zod and nothing else.
@@ -158,7 +160,9 @@ Four rules hold it together:
 1. **`@guhbot/protocol` depends only on `zod`.** The mobile client imports it, so
    a Node-only import there would break the phone build.
 2. **Only `@guhbot/server` binds a socket.** A capability that wants to be
-   reachable exposes a tool or a method, never its own listener.
+   reachable exposes a tool or a method, never its own listener. The companion
+   network transport (`@guhbot/companion`) is part of the server's own
+   dependency closure and only listens when the operator passes `--companion`.
 3. **`@guhbot/host-core` owns every durable write.** Nothing else opens the
    database.
 4. **Capabilities compose; they do not patch the runtime.** A capability
@@ -199,7 +203,7 @@ stored unencrypted, and there is no cost budget per agent.
 pnpm test
 ```
 
-**841 tests** across 55 files, concentrating on properties that would be dangerous
+**851 tests** across 55 files, concentrating on properties that would be dangerous
 to get wrong rather than on coverage. Four more run against a live model when
 credentials are present.
 
