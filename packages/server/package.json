@@ -1,0 +1,34 @@
+{
+  "name": "@guhbot/server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Host server: WebSocket transport, pairing, and event fan-out for desktop, mobile and cloud clients.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "guhbot-host": "./dist/cli.js"
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b",
+    "dev": "node --experimental-strip-types src/cli.ts"
+  },
+  "dependencies": {
+    "@guhbot/agent": "workspace:*",
+    "@guhbot/host-core": "workspace:*",
+    "@guhbot/protocol": "workspace:*",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.13"
+  }
+}
