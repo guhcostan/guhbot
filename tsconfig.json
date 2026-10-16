@@ -1,0 +1,14 @@
+{
+  "files": [],
+  "references": [
+    {
+      "path": "packages/protocol"
+    },
+    {
+      "path": "packages/host-core"
+    },
+    {
+      "path": "packages/agent"
+    }
+  ]
+}
