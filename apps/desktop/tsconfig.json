@@ -9,6 +9,6 @@
     "types": ["node"],
     "noEmit": false
   },
-  "include": ["src/main/**/*.ts", "src/preload/**/*.ts"],
+  "include": ["src/main/**/*.ts", "src/preload/**/*.ts", "src/preload/**/*.cts"],
   "references": [{ "path": "../../packages/protocol" }, { "path": "../../packages/host-core" }, { "path": "../../packages/agent" }, { "path": "../../packages/server" }]
 }

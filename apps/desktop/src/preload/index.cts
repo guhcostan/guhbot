@@ -13,8 +13,15 @@
  * `token` is a credential. It is passed once at load, never written to
  * `localStorage`, and never exposed on `window` by anything other than this
  * frozen object.
+ *
+ * This file is `.cts` and uses `import ... = require(...)` on purpose. The
+ * package is `type: module`, and a renderer created with `sandbox: true` cannot
+ * load an ESM preload at all, so the emitted file has to be CommonJS — and under
+ * `verbatimModuleSyntax` a `.cts` file may only use CommonJS import syntax.
  */
-import { contextBridge, ipcRenderer } from 'electron';
+import electron = require('electron');
+
+const { contextBridge, ipcRenderer } = electron;
 
 export interface DesktopBridge {
   /** Where the embedded host is listening. */

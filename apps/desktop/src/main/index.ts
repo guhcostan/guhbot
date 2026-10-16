@@ -34,7 +34,10 @@ function createWindow(): BrowserWindow {
     backgroundColor: '#0b0d10',
     show: false,
     webPreferences: {
-      preload: join(here, '../preload/index.js'),
+      // `.cjs`, not `.js`: this package is `type: module`, and a sandboxed
+      // renderer cannot load an ESM preload at all. The source is `index.cts`
+      // precisely so the emitted file is CommonJS.
+      preload: join(here, '../preload/index.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
