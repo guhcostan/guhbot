@@ -738,3 +738,407 @@ h2 {
   outline-offset: 2px;
   border-radius: 4px;
 }
+
+/* ==========================================================================
+   Mascot and the sections built on it
+   ==========================================================================
+   Keeper is emitted by assets/generate.mjs and sized entirely by CSS, because
+   the SVGs deliberately carry no width/height attributes.
+   ========================================================================== */
+
+.keeper {
+  display: block;
+  width: 100%;
+  height: auto;
+  /* The character is dark on a dark ground, so it needs a little lift to read. */
+  filter: drop-shadow(0 6px 26px rgba(103, 232, 162, 0.14));
+}
+
+.brand-logo {
+  display: block;
+  width: 118px;
+  height: 32px;
+}
+
+.footer-brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.footer-brand img {
+  width: 24px;
+  height: 24px;
+  display: block;
+}
+
+/* -- Hero, now a two-column layout ---------------------------------------- */
+
+.hero-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 48px;
+  align-items: center;
+}
+
+@media (max-width: 900px) {
+  .hero-grid {
+    grid-template-columns: 1fr;
+    gap: 36px;
+  }
+  .hero-art {
+    order: -1;
+    max-width: 200px;
+  }
+}
+
+.hero-art {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+/* The stage gives the character somewhere to stand: a soft pool of light plus a
+   ring, which reads as "installed and running" rather than floating. */
+.keeper-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+}
+
+.keeper-glow {
+  position: absolute;
+  inset: 12%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 44%, rgba(103, 232, 162, 0.22), transparent 68%);
+  filter: blur(14px);
+}
+
+.keeper-main {
+  position: relative;
+  width: 82%;
+  max-width: 190px;
+}
+
+.keeper-caption {
+  margin: 0 !important;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-faint) !important;
+  max-width: 26ch;
+}
+
+.keeper-caption strong {
+  color: var(--text-dim);
+}
+
+.keeper-wait {
+  width: 72px;
+  margin-bottom: 18px;
+}
+
+/* -- The three states ----------------------------------------------------- */
+
+.states {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+}
+
+@media (max-width: 820px) {
+  .states {
+    grid-template-columns: 1fr;
+  }
+}
+
+.state {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.state .keeper {
+  width: 78px;
+  margin-bottom: 4px;
+}
+
+.state h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 620;
+}
+
+.state h3 code {
+  background: #1a2027;
+  border: 1px solid var(--line);
+  padding: 3px 9px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.state-line {
+  margin: 0 !important;
+  font-size: 12.5px;
+  color: var(--text-faint) !important;
+}
+
+.state ul {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  width: 100%;
+}
+
+.state li {
+  position: relative;
+  padding-left: 18px;
+  margin-bottom: 6px;
+  font-size: 14px;
+  color: var(--text-dim);
+}
+
+.state li::before {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 9px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #33404b;
+}
+
+.state-person {
+  border-color: #234034;
+}
+.state-person li::before {
+  background: var(--mint-dim);
+}
+.state-background {
+  border-color: #2a3742;
+}
+.state-background li::before {
+  background: #3d5566;
+}
+.state-asleep {
+  opacity: 0.88;
+}
+.state-asleep li::before {
+  background: #2a323a;
+}
+
+/* -- Product mock --------------------------------------------------------- */
+
+.mock {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: #0a0c0f;
+  margin-bottom: 34px;
+  box-shadow: 0 34px 80px -50px rgba(0, 0, 0, 0.95);
+}
+
+@media (max-width: 760px) {
+  .mock {
+    grid-template-columns: 1fr;
+  }
+  .mock-side {
+    border-right: 0 !important;
+    border-bottom: 1px solid var(--line-soft);
+    display: none;
+  }
+}
+
+.mock-side {
+  border-right: 1px solid var(--line-soft);
+  padding: 14px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: #0c0f12;
+}
+
+.mock-search {
+  font-size: 12px;
+  color: #4d5760;
+  padding: 7px 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  margin-bottom: 8px;
+}
+
+.mock-agent {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 9px;
+  border-radius: 8px;
+}
+
+.mock-agent img {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+}
+
+.mock-agent span {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.mock-agent b {
+  font-size: 13px;
+  font-weight: 550;
+  color: #cdd4db;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mock-agent i {
+  font-style: normal;
+  font-size: 11px;
+  color: #5f6975;
+}
+
+.mock-active {
+  background: #141b22;
+}
+
+.mock-active i {
+  color: var(--amber);
+}
+
+.mock-thread {
+  padding: 14px 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mock-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line-soft);
+  margin-bottom: 6px;
+}
+
+.mock-head img {
+  width: 22px;
+  height: 22px;
+}
+
+.mock-head b {
+  font-size: 13.5px;
+}
+
+.mock-model {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-faint);
+  border: 1px solid var(--line);
+  padding: 2px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.bubble {
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.6;
+  color: #8fa0ae;
+  background: #10151a;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  padding: 8px 11px;
+  align-self: flex-start;
+  max-width: 100%;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.bubble-out {
+  color: #6f7d8a;
+  background: transparent;
+  border-style: dashed;
+}
+
+.bubble-say {
+  font-family: var(--font);
+  font-size: 13.5px;
+  color: var(--text);
+  background: #131a21;
+  white-space: normal;
+}
+
+.bubble-say b {
+  color: var(--mint);
+}
+
+.bubble-ask {
+  font-family: var(--font);
+  font-size: 13px;
+  white-space: normal;
+  border-color: #4a3d22;
+  background: #1a1610;
+  color: #e2cfa4;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.bubble-ask code {
+  color: #e2cfa4;
+  background: none;
+}
+
+.ask {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--amber);
+  border: 1px solid #4a3d22;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+.ask-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+}
+
+.ask-yes,
+.ask-no {
+  font-size: 11.5px;
+  padding: 3px 11px;
+  border-radius: 6px;
+  font-weight: 600;
+}
+
+.ask-yes {
+  background: var(--mint);
+  color: #04120b;
+}
+
+.ask-no {
+  border: 1px solid #4a3d22;
+  color: #b8a684;
+}

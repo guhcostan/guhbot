@@ -15,7 +15,7 @@
       content="Open-source agent host. Runs on your machine. Every operation is classified by whether it needs a human present."
     />
     <meta property="og:type" content="website" />
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230b0d10'/%3E%3Cpath d='M9 22V10h3.2v4.6h7.6V10H23v12h-3.2v-4.7h-7.6V22z' fill='%2367e8a2'/%3E%3C/svg%3E" />
+    <link rel="icon" href="./assets/icon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
@@ -23,12 +23,12 @@
 
     <header class="nav">
       <div class="wrap nav-inner">
-        <a class="brand" href="/">
-          <span class="brand-mark" aria-hidden="true"></span>
-          <span class="brand-name">guhbot</span>
+        <a class="brand" href="/" aria-label="guhbot home">
+          <img class="brand-logo" src="./assets/logo.svg" alt="guhbot" width="118" height="32" />
         </a>
         <nav class="nav-links" aria-label="Main">
-          <a href="#how">How it works</a>
+          <a href="#how">The idea</a>
+          <a href="#can">What it does</a>
           <a href="#safety">Safety</a>
           <a href="#run">Run it</a>
           <a href="https://github.com/guhcostan/guhbot" rel="noopener">GitHub</a>
@@ -40,45 +40,60 @@
     <main id="main">
       <!-- Hero ------------------------------------------------------------ -->
       <section class="hero">
-        <div class="wrap">
-          <p class="eyebrow">Open source · Apache-2.0 · Runs on your machine</p>
-          <h1>
-            Give an agent real work.<br />
-            Then actually leave the house.
-          </h1>
-          <p class="lede">
-            guhbot is an agent host you run yourself. It reads your files, runs commands, browses
-            the web and messages from your phone — and every single operation it can perform is
-            classified by whether it needs a human present.
-          </p>
-          <div class="cta">
-            <a class="btn btn-primary" href="https://github.com/guhcostan/guhbot" rel="noopener">Get the code</a>
-            <a class="btn" href="#waitlist">Hosted version — join the waitlist</a>
+        <div class="wrap hero-grid">
+          <div class="hero-copy">
+            <p class="eyebrow">Open source · Apache-2.0 · Runs on your machine</p>
+            <h1>
+              Give an agent real work.<br />
+              Then actually leave the house.
+            </h1>
+            <p class="lede">
+              guhbot is an agent host you run yourself. It reads your files, runs commands, browses
+              the web and messages from your phone — and every operation it can perform is
+              classified by whether it needs a human present.
+            </p>
+            <div class="cta">
+              <a class="btn btn-primary" href="https://github.com/guhcostan/guhbot" rel="noopener">Get the code</a>
+              <a class="btn" href="#waitlist">Hosted version — join the waitlist</a>
+            </div>
+            <p class="fineprint">
+              No account. No vendor backend. Bring your own model key, or the agent subscription you
+              already pay for.
+            </p>
           </div>
-          <p class="fineprint">
-            No account. No vendor backend. Bring your own model key, or point it at a box on your LAN.
-          </p>
 
+          <div class="hero-art">
+            <div class="keeper-stage">
+              <div class="keeper-glow" aria-hidden="true"></div>
+              <img class="keeper keeper-main" src="./assets/keeper-person.svg" alt="" width="176" height="176" />
+            </div>
+            <p class="keeper-caption">
+              <strong>Keeper.</strong> Both eyes open means a human is present.
+            </p>
+          </div>
+        </div>
+
+        <div class="wrap">
           <div class="terminal" role="img" aria-label="A terminal session starting the host and running a task">
             <div class="terminal-bar"><span></span><span></span><span></span></div>
-            <pre><code><span class="c-dim">$</span> guhbot-host --lan --base-url https://opencode.ai/zen/go/v1 --model deepseek-v4.1-flash
+            <pre><code><span class="c-dim">$</span> guhbot-host --base-url https://opencode.ai/zen/go/v1 --model deepseek-v4.1-flash
 
   guhbot host 0.1.0  (self-hosted)
-  listening     http://192.168.1.20:8787
+  listening     http://127.0.0.1:8787     <span class="c-dim">loopback only</span>
   inference     ready (deepseek-v4.1-flash)
   workspace     ~/.guhbot/workspace
-  capabilities  browser, mcp
-  operator      ~/.guhbot/operator.token  (0600, person class)
+  capabilities  browser, mcp, canvas
+  operator      ~/.guhbot/operator.token  <span class="c-dim">(0600, person class)</span>
 
-<span class="c-dim"># a phone pairs, and can only ever join as `background`</span>
+<span class="c-dim"># a phone pairs. it can only ever join as `background`.</span>
 <span class="c-green">✓</span> paired: iPhone (background) — 1 device, 0 with presence
 
-<span class="c-dim"># the agent works; anything that spends or sends waits for a human</span>
+<span class="c-dim"># the agent works. anything that spends or sends waits for a human.</span>
   run (Sales Analyst) → running
   <span class="c-amber">⏸</span> approval: Run write_file?
   run → succeeded
 
-<span class="c-dim"># what it wrote is on your disk, not in someone's cloud</span>
+<span class="c-dim"># what it wrote is on your disk, not in someone's cloud.</span>
   $ cat ~/.guhbot/workspace/summary.txt
   total=443</code></pre>
           </div>
@@ -102,62 +117,110 @@
         </div>
       </section>
 
-      <!-- The model -------------------------------------------------------- -->
+      <!-- The idea --------------------------------------------------------- -->
       <section class="band" id="how">
         <div class="wrap">
-          <h2>Two classes of operation. That is the whole idea.</h2>
+          <h2>Two classes of operation. The mascot shows you which.</h2>
           <p class="section-lede">
             Every method the host exposes is declared as one of two things, and the host enforces
             which one you may call. Not a client check. Not a setting.
           </p>
 
-          <div class="split">
-            <article class="card card-person">
+          <div class="states">
+            <article class="state state-person">
+              <img class="keeper" src="./assets/keeper-person.svg" alt="" width="96" height="96" />
               <h3><code>person</code></h3>
-              <p class="card-count">Needs a human present</p>
+              <p class="state-line">Both eyes open · a human is present</p>
               <ul>
-                <li>Send a prompt, start a run</li>
+                <li>Start a run, send a prompt</li>
                 <li>Resolve an approval</li>
                 <li>Write or replace a secret</li>
                 <li>Create, change or delete an agent</li>
               </ul>
-              <p class="card-note">
-                A phone that paired over the network is <strong>always</strong> the other class. It
-                cannot promote itself, and there is no flag that would let it.
-              </p>
             </article>
 
-            <article class="card card-background">
+            <article class="state state-background">
+              <img class="keeper" src="./assets/keeper-background.svg" alt="" width="96" height="96" />
               <h3><code>background</code></h3>
-              <p class="card-count">Safe with nobody watching</p>
+              <p class="state-line">One eye open · working alone</p>
               <ul>
                 <li>Read the transcript</li>
-                <li>Check host status and health</li>
+                <li>Check status and health</li>
                 <li>List tools and capabilities</li>
                 <li>See what is waiting on you</li>
               </ul>
-              <p class="card-note">
-                This is what lets an agent work overnight while your phone stays a window rather
-                than a loaded credential.
-              </p>
+            </article>
+
+            <article class="state state-asleep">
+              <img class="keeper" src="./assets/keeper-asleep.svg" alt="" width="96" height="96" />
+              <h3><code>parked</code></h3>
+              <p class="state-line">Eyes closed · nothing is running</p>
+              <ul>
+                <li>Waiting for a schedule</li>
+                <li>Waiting for a webhook</li>
+                <li>Waiting for you to come back</li>
+              </ul>
             </article>
           </div>
 
           <p class="callout">
-            A stolen phone can read your transcripts. It cannot send a message as you, spend a
-            dollar, or approve its own request.
+            A phone that pairs over the network is <strong>always</strong> the middle state. It
+            cannot promote itself, and there is no flag that would let it. A stolen phone can read
+            your transcripts; it cannot send a message as you, spend a dollar, or approve its own
+            request.
           </p>
         </div>
       </section>
 
-      <!-- Capabilities ----------------------------------------------------- -->
-      <section class="band">
+      <!-- What it does ----------------------------------------------------- -->
+      <section class="band" id="can">
         <div class="wrap">
           <h2>What an agent can actually do</h2>
           <p class="section-lede">
-            Each capability is a package with its own tests and its own refusal paths. Nothing is on
-            by default unless the thing it needs has been configured.
+            Each capability is its own package with its own tests and its own refusal paths.
+            Anything that reaches the network stays off until you say what it may reach.
           </p>
+
+          <div class="mock">
+            <div class="mock-side">
+              <div class="mock-search">Search</div>
+              <div class="mock-agent mock-active">
+                <img src="./assets/avatar-1.svg" alt="" width="26" height="26" />
+                <span><b>Sales Analyst</b><i>waiting on your yes</i></span>
+              </div>
+              <div class="mock-agent">
+                <img src="./assets/avatar-2.svg" alt="" width="26" height="26" />
+                <span><b>Inbox Manager</b><i>working</i></span>
+              </div>
+              <div class="mock-agent">
+                <img src="./assets/avatar-3.svg" alt="" width="26" height="26" />
+                <span><b>Talent Scout</b><i>queued</i></span>
+              </div>
+              <div class="mock-agent">
+                <img src="./assets/avatar-asleep.svg" alt="" width="26" height="26" />
+                <span><b>Invoice Collector</b><i>parked</i></span>
+              </div>
+            </div>
+            <div class="mock-thread">
+              <div class="mock-head">
+                <img src="./assets/avatar-1.svg" alt="" width="22" height="22" />
+                <b>Sales Analyst</b>
+                <span class="mock-model">deepseek-v4.1-flash</span>
+              </div>
+              <div class="bubble">&rarr; list_dir {"path": "."}</div>
+              <div class="bubble bubble-out">&larr; file sales.csv &middot; file summary.txt</div>
+              <div class="bubble">&rarr; read_file {"path": "sales.csv"}</div>
+              <div class="bubble bubble-out">&larr; region,units &middot; north,120 &middot; south,95 &hellip;</div>
+              <div class="bubble bubble-ask">
+                <span class="ask">Needs you</span>
+                Run <code>write_file</code> &mdash; summary.txt
+                <span class="ask-actions"><span class="ask-yes">Approve</span><span class="ask-no">Deny</span></span>
+              </div>
+              <div class="bubble bubble-out">&larr; Wrote 10 characters to summary.txt.</div>
+              <div class="bubble bubble-say">Total across all regions is <b>443</b>. Written to summary.txt.</div>
+            </div>
+          </div>
+
           <div class="grid">
             <article class="feature">
               <h3>Files and commands</h3>
@@ -170,13 +233,33 @@
             </article>
 
             <article class="feature">
+              <h3>Any agent you already pay for</h3>
+              <p>
+                Drive Claude Code, Codex or OpenCode as the engine, or point the built-in loop at
+                any OpenAI-compatible endpoint. If you already have a subscription, you do not need
+                a second key.
+              </p>
+              <p class="tag tag-on">bring your own</p>
+            </article>
+
+            <article class="feature">
               <h3>Browser and search</h3>
               <p>
-                Drives a real Chromium with its own throwaway profile. Egress is denied unless you
-                name the hosts — and the check runs on every request, every redirect hop, and the
-                final URL. No cookies are ever exposed to the model.
+                A real Chromium with a throwaway profile. Egress is denied unless you name the
+                hosts, and the check runs on every request, every redirect hop, and the final URL.
+                Cookies are never exposed to the model.
               </p>
               <p class="tag">off until you allow hosts</p>
+            </article>
+
+            <article class="feature">
+              <h3>A canvas you can look at</h3>
+              <p>
+                The agent renders HTML you can open, served under its own content security policy
+                in a frame with no same-origin access. Charts, reports, small tools — real output
+                instead of another wall of chat.
+              </p>
+              <p class="tag tag-on">sandboxed</p>
             </article>
 
             <article class="feature">
@@ -187,6 +270,15 @@
                 explicit opt-in.
               </p>
               <p class="tag">off until you configure a server</p>
+            </article>
+
+            <article class="feature">
+              <h3>Works while you sleep</h3>
+              <p>
+                Scheduled and webhook-triggered automations, with a cron engine that handles DST and
+                does not fire 72 times after your laptop was closed for three days.
+              </p>
+              <p class="tag tag-on">built in</p>
             </article>
 
             <article class="feature">
@@ -207,21 +299,11 @@
               </p>
               <p class="tag tag-on">built in</p>
             </article>
-
-            <article class="feature">
-              <h3>Many agents, one thread</h3>
-              <p>
-                Agents are long-lived identities with their own instructions and transcript. Group
-                them so they hand work to each other while you watch, instead of approving every
-                step.
-              </p>
-              <p class="tag tag-on">built in</p>
-            </article>
           </div>
         </div>
       </section>
 
-      <!-- Safety receipts -------------------------------------------------- -->
+      <!-- Safety ----------------------------------------------------------- -->
       <section class="band" id="safety">
         <div class="wrap">
           <h2>Claims you can check</h2>
@@ -232,12 +314,12 @@
           <div class="receipts">
             <div class="receipt"><code>person</code><span>A background device cannot resolve an approval</span></div>
             <div class="receipt"><code>pairing</code><span>A paired device joins as background even when it asks for person</span></div>
+            <div class="receipt"><code>loopback</code><span>The runtime never binds a network socket</span></div>
+            <div class="receipt"><code>rebinding</code><span>A browser cannot reach the local API by resolving a hostname to 127.0.0.1</span></div>
             <div class="receipt"><code>secrets</code><span>A value never appears in any protocol response</span></div>
             <div class="receipt"><code>jail</code><span>A model-supplied path cannot escape the workspace, symlinks included</span></div>
-            <div class="receipt"><code>shell</code><span>Commands run with no shell, so metacharacters stay literal</span></div>
+            <div class="receipt"><code>sandbox</code><span>A canvas frame cannot reach the host origin</span></div>
             <div class="receipt"><code>egress</code><span>An empty allow list means nothing is reachable at all</span></div>
-            <div class="receipt"><code>plugins</code><span>A capability cannot shadow a core method</span></div>
-            <div class="receipt"><code>boot</code><span>Runs left in flight by a crash are failed, never left running</span></div>
           </div>
         </div>
       </section>
@@ -283,6 +365,7 @@ node packages/server/dist/cli.js --data-dir ~/.guhbot</code></pre>
       <!-- Waitlist --------------------------------------------------------- -->
       <section class="band band-last" id="waitlist">
         <div class="wrap narrow">
+          <img class="keeper keeper-wait" src="./assets/keeper-person.svg" alt="" width="72" height="72" />
           <h2>Want the hosted version?</h2>
           <p>
             Leave an address and we will tell you when it is ready. One email, when there is
@@ -290,12 +373,7 @@ node packages/server/dist/cli.js --data-dir ~/.guhbot</code></pre>
           </p>
 
           <!-- data-endpoint is what main.js posts to; a deployment overrides it. -->
-          <form
-            class="waitlist"
-            id="waitlist-form"
-            data-endpoint="/api/waitlist"
-            novalidate
-          >
+          <form class="waitlist" id="waitlist-form" data-endpoint="/api/waitlist" novalidate>
             <label class="sr-only" for="email">Email address</label>
             <input
               id="email"
@@ -320,7 +398,10 @@ node packages/server/dist/cli.js --data-dir ~/.guhbot</code></pre>
     <footer class="footer">
       <div class="wrap footer-inner">
         <div>
-          <span class="brand-name">guhbot</span>
+          <div class="footer-brand">
+            <img src="./assets/keeper-person.svg" alt="" width="24" height="24" />
+            <span class="brand-name">guhbot</span>
+          </div>
           <p class="footer-note">Open-source agent host. Apache-2.0.</p>
         </div>
         <nav class="footer-links" aria-label="Footer">
