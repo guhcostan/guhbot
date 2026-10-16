@@ -1,9 +1,9 @@
 import type { Agent, Approval, MethodInput, MethodName, MethodOutput, RpcError } from '@guhbot/protocol';
 import { describe, expect, it } from 'vitest';
 
-import type { Connection, ConnectionSnapshot, HostConnectionOptions } from '../src/host/connection.js';
-import { createSessionStore, HOST_KEY, TOKEN_KEY, type StringStore } from '../src/host/storage.js';
-import { createAppStore } from '../src/state/app-store.js';
+import type { Connection, ConnectionSnapshot, HostConnectionOptions } from '../src/host/connection';
+import { createSessionStore, HOST_KEY, TOKEN_KEY, type StringStore } from '../src/host/storage';
+import { createAppStore } from '../src/state/app-store';
 
 const TOKEN = 't'.repeat(43);
 const ISO = '2026-03-04T12:00:00.000Z';

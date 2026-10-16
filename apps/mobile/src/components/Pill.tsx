@@ -1,7 +1,7 @@
 import type { ReactElement } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { colors, radius, spacing } from '../theme.js';
+import { colors, radius, spacing } from '../theme';
 
 export type PillTone = 'neutral' | 'info' | 'good' | 'warn' | 'bad';
 

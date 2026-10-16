@@ -3,9 +3,9 @@ import { StatusBar } from 'expo-status-bar';
 import type { ReactElement } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { RootNavigator } from './src/navigation/RootNavigator.js';
-import { StoreProvider } from './src/state/provider.js';
-import { colors } from './src/theme.js';
+import { RootNavigator } from './src/navigation/RootNavigator';
+import { StoreProvider } from './src/state/provider';
+import { colors } from './src/theme';
 
 const theme: Theme = {
   ...DarkTheme,

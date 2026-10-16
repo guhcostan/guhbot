@@ -1,7 +1,7 @@
 import type { ReactElement } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { avatarHue, colors, initials, radius, spacing } from '../theme.js';
+import { avatarHue, colors, initials, radius, spacing } from '../theme';
 
 /**
  * Initial-based avatar. A stable hue per name keeps agents distinguishable

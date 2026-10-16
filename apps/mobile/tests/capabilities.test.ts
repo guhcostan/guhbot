@@ -1,7 +1,7 @@
 import { METHOD_NAMES, methodAuthz, methods, type DeviceClass } from '@guhbot/protocol';
 import { describe, expect, it } from 'vitest';
 
-import { asDeviceClass, capabilityFor, isPermitted, refusalDetail } from '../src/core/capabilities.js';
+import { asDeviceClass, capabilityFor, isPermitted, refusalDetail } from '../src/core/capabilities';
 
 const PHONE: DeviceClass = 'background';
 

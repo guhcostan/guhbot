@@ -1,9 +1,9 @@
 import { createContext, useContext, useEffect, useMemo, type ReactElement, type ReactNode } from 'react';
 
-import type { AppSnapshot, AppStore } from './app-store.js';
-import { createStores, type Stores } from './stores.js';
-import type { TranscriptSnapshot, TranscriptStore } from './transcript-store.js';
-import { useStore } from './use-store.js';
+import type { AppSnapshot, AppStore } from './app-store';
+import { createStores, type Stores } from './stores';
+import type { TranscriptSnapshot, TranscriptStore } from './transcript-store';
+import { useStore } from './use-store';
 
 const StoresContext = createContext<Stores | null>(null);
 

@@ -5,8 +5,8 @@
  * message has to name the likely cause: an unreachable host, or a code that was
  * already used or has expired.
  */
-import { describeEndpoint, type HostEndpoint } from '../core/endpoint.js';
-import { describeError, isRpcError } from '../core/errors.js';
+import { describeEndpoint, type HostEndpoint } from '../core/endpoint';
+import { describeError, isRpcError } from '../core/errors';
 
 export function pairingMessage(error: unknown, endpoint: HostEndpoint): string {
   if (isRpcError(error)) {

@@ -1,13 +1,13 @@
 import type { ReactElement, ReactNode } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { ConnectionBanner } from '../components/ConnectionBanner.js';
-import { NoticeCard } from '../components/NoticeCard.js';
-import { Pill } from '../components/Pill.js';
-import { Screen } from '../components/Screen.js';
-import { describeEndpoint } from '../core/endpoint.js';
-import { useAppState, useAppStore } from '../state/provider.js';
-import { colors, fontSize, radius, spacing } from '../theme.js';
+import { ConnectionBanner } from '../components/ConnectionBanner';
+import { NoticeCard } from '../components/NoticeCard';
+import { Pill } from '../components/Pill';
+import { Screen } from '../components/Screen';
+import { describeEndpoint } from '../core/endpoint';
+import { useAppState, useAppStore } from '../state/provider';
+import { colors, fontSize, radius, spacing } from '../theme';
 
 export function SettingsScreen(): ReactElement {
   const state = useAppState();

@@ -1,8 +1,8 @@
 import type { Entry, MethodName } from '@guhbot/protocol';
 import { describe, expect, it } from 'vitest';
 
-import { itemSeq, type TranscriptItem } from '../src/core/transcript.js';
-import { createTranscriptStore, type TranscriptStoreDeps } from '../src/state/transcript-store.js';
+import { itemSeq, type TranscriptItem } from '../src/core/transcript';
+import { createTranscriptStore, type TranscriptStoreDeps } from '../src/state/transcript-store';
 
 const AGENT = 'ag_1';
 

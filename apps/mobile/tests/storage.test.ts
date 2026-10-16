@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { createSessionStore, HOST_KEY, parsePersistedHost, TOKEN_KEY, type StringStore } from '../src/host/storage.js';
+import { createSessionStore, HOST_KEY, parsePersistedHost, TOKEN_KEY, type StringStore } from '../src/host/storage';
 
 function memoryStore(initial: Record<string, string> = {}): StringStore & { readonly values: Map<string, string> } {
   const values = new Map(Object.entries(initial));

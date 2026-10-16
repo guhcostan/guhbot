@@ -5,7 +5,7 @@
  * parser below: a corrupt entry must send the user back to the pairing screen,
  * never crash the app on launch.
  */
-import { normalizeHost, parsePort, type HostEndpoint } from '../core/endpoint.js';
+import { normalizeHost, parsePort, type HostEndpoint } from '../core/endpoint';
 
 export const HOST_KEY = 'guhbot.host';
 export const TOKEN_KEY = 'guhbot.device-token';

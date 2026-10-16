@@ -17,8 +17,8 @@ import {
 } from '@guhbot/protocol';
 import { GuhbotClient, type ClientState } from '@guhbot/server';
 
-import { asDeviceClass } from '../core/capabilities.js';
-import { describeEndpoint, rpcUrl, type HostEndpoint } from '../core/endpoint.js';
+import { asDeviceClass } from '../core/capabilities';
+import { describeEndpoint, rpcUrl, type HostEndpoint } from '../core/endpoint';
 
 export interface ConnectionSnapshot {
   readonly clientState: ClientState;

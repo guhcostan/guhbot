@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { ageLabel, clampText, remainingLabel, shortTime } from '../src/core/format.js';
+import { ageLabel, clampText, remainingLabel, shortTime } from '../src/core/format';
 
 const NOON = Date.parse('2026-03-04T12:00:00.000Z');
 

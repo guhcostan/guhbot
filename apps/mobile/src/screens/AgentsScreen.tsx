@@ -4,16 +4,16 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useState, type ReactElement } from 'react';
 import { ActivityIndicator, Alert, FlatList, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { Avatar, EmptyState } from '../components/Avatar.js';
-import { ConnectionBanner } from '../components/ConnectionBanner.js';
-import { NoticeCard } from '../components/NoticeCard.js';
-import { Pill, type PillTone } from '../components/Pill.js';
-import { Screen } from '../components/Screen.js';
-import { capabilityFor } from '../core/capabilities.js';
-import { ageLabel } from '../core/format.js';
-import type { RootStackParamList } from '../navigation/types.js';
-import { useAppState, useAppStore } from '../state/provider.js';
-import { colors, fontSize, radius, spacing } from '../theme.js';
+import { Avatar, EmptyState } from '../components/Avatar';
+import { ConnectionBanner } from '../components/ConnectionBanner';
+import { NoticeCard } from '../components/NoticeCard';
+import { Pill, type PillTone } from '../components/Pill';
+import { Screen } from '../components/Screen';
+import { capabilityFor } from '../core/capabilities';
+import { ageLabel } from '../core/format';
+import type { RootStackParamList } from '../navigation/types';
+import { useAppState, useAppStore } from '../state/provider';
+import { colors, fontSize, radius, spacing } from '../theme';
 
 const STATUS_TONE: Readonly<Record<Agent['status'], PillTone>> = { active: 'good', paused: 'warn', archived: 'neutral' };
 

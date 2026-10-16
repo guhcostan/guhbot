@@ -13,7 +13,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 
-import { createSessionStore, type StringStore } from './storage.js';
+import { createSessionStore, type StringStore } from './storage';
 
 const values: StringStore = {
   get: (key) => AsyncStorage.getItem(key),

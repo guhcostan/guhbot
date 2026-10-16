@@ -2,15 +2,15 @@ import type { Approval } from '@guhbot/protocol';
 import type { ReactElement } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
-import { Avatar } from '../components/Avatar.js';
-import { ConnectionBanner } from '../components/ConnectionBanner.js';
-import { NoticeCard } from '../components/NoticeCard.js';
-import { Pill } from '../components/Pill.js';
-import { Screen } from '../components/Screen.js';
-import { capabilityFor } from '../core/capabilities.js';
-import { ageLabel, remainingLabel } from '../core/format.js';
-import { useAppState, useAppStore } from '../state/provider.js';
-import { colors, fontSize, radius, spacing } from '../theme.js';
+import { Avatar } from '../components/Avatar';
+import { ConnectionBanner } from '../components/ConnectionBanner';
+import { NoticeCard } from '../components/NoticeCard';
+import { Pill } from '../components/Pill';
+import { Screen } from '../components/Screen';
+import { capabilityFor } from '../core/capabilities';
+import { ageLabel, remainingLabel } from '../core/format';
+import { useAppState, useAppStore } from '../state/provider';
+import { colors, fontSize, radius, spacing } from '../theme';
 
 export function ApprovalsScreen(): ReactElement {
   const state = useAppState();

@@ -1,7 +1,7 @@
 import type { ReactElement, ReactNode } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { colors, radius, spacing, toneColor, type NoticeTone } from '../theme.js';
+import { colors, radius, spacing, toneColor, type NoticeTone } from '../theme';
 
 export interface NoticeAction {
   readonly label: string;

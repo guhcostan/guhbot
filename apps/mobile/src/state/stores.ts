@@ -6,11 +6,11 @@
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
-import { defaultDeviceName, devicePlatformFor } from '../core/device.js';
-import { HostConnection } from '../host/connection.js';
-import { sessionStore } from '../host/expo-storage.js';
-import { createAppStore, type AppStore } from './app-store.js';
-import { createTranscriptStore, type TranscriptStore, type TranscriptStoreDeps } from './transcript-store.js';
+import { defaultDeviceName, devicePlatformFor } from '../core/device';
+import { HostConnection } from '../host/connection';
+import { sessionStore } from '../host/expo-storage';
+import { createAppStore, type AppStore } from './app-store';
+import { createTranscriptStore, type TranscriptStore, type TranscriptStoreDeps } from './transcript-store';
 
 export interface Stores {
   readonly app: AppStore;

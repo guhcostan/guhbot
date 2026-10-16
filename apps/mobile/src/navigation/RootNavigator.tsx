@@ -2,16 +2,16 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import type { ReactElement } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
-import { AgentsHeaderButtons } from '../components/AgentsHeaderButtons.js';
-import { Screen } from '../components/Screen.js';
-import { AgentsScreen } from '../screens/AgentsScreen.js';
-import { ApprovalsScreen } from '../screens/ApprovalsScreen.js';
-import { PairingScreen } from '../screens/PairingScreen.js';
-import { SettingsScreen } from '../screens/SettingsScreen.js';
-import { ThreadScreen } from '../screens/ThreadScreen.js';
-import { useAppState } from '../state/provider.js';
-import { colors, spacing } from '../theme.js';
-import type { RootStackParamList } from './types.js';
+import { AgentsHeaderButtons } from '../components/AgentsHeaderButtons';
+import { Screen } from '../components/Screen';
+import { AgentsScreen } from '../screens/AgentsScreen';
+import { ApprovalsScreen } from '../screens/ApprovalsScreen';
+import { PairingScreen } from '../screens/PairingScreen';
+import { SettingsScreen } from '../screens/SettingsScreen';
+import { ThreadScreen } from '../screens/ThreadScreen';
+import { useAppState } from '../state/provider';
+import { colors, spacing } from '../theme';
+import type { RootStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 

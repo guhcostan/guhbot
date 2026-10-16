@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { parsePairingUri, type PairingLink } from '../src/core/pairing.js';
+import { parsePairingUri, type PairingLink } from '../src/core/pairing';
 
 const VALID = 'guhbot://pair?host=192.168.1.20&port=8787&id=pr_8f2c&code=12345678';
 

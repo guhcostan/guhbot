@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { pairingMessage } from '../src/host/pairing.js';
+import { pairingMessage } from '../src/host/pairing';
 
 const ENDPOINT = { host: '192.168.1.20', port: 8787 };
 

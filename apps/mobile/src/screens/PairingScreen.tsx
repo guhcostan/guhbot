@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { ReactElement } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Linking from 'expo-linking';
 
-import { describeEndpoint, parseEndpoint } from '../core/endpoint.js';
-import { parsePairingUri } from '../core/pairing.js';
-import { useAppState, useAppStore } from '../state/provider.js';
-import { colors, fontSize, radius, spacing } from '../theme.js';
-import { NoticeCard } from '../components/NoticeCard.js';
-import { Screen } from '../components/Screen.js';
+import { describeEndpoint, parseEndpoint } from '../core/endpoint';
+import { parsePairingUri } from '../core/pairing';
+import { useAppState, useAppStore } from '../state/provider';
+import { colors, fontSize, radius, spacing } from '../theme';
+import { NoticeCard } from '../components/NoticeCard';
+import { Screen } from '../components/Screen';
 
 const CODE_PATTERN = /^\d{8}$/;
 
@@ -78,6 +79,9 @@ export function PairingScreen(): ReactElement {
   const busy = state.pairing.busy;
 
   return (
+    // This screen hides the native header, so it owns the top inset itself:
+    // without it the brand row renders under the status bar.
+    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
     <Screen>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.brand}>
@@ -193,10 +197,12 @@ export function PairingScreen(): ReactElement {
         </View>
       </ScrollView>
     </Screen>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safe: { backgroundColor: colors.background, flex: 1 },
   content: { padding: spacing.lg, paddingBottom: spacing.xxl * 2 },
   brand: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm, marginTop: spacing.sm },
   mark: {

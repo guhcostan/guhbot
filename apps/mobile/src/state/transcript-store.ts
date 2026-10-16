@@ -10,9 +10,9 @@
  */
 import type { EventName, MethodInput, MethodName, MethodOutput } from '@guhbot/protocol';
 
-import { describeError, type Problem } from '../core/errors.js';
-import { applyEvent, mergeEntries, newestSeq, oldestSeq, type TranscriptItem } from '../core/transcript.js';
-import { createStore, type Readable } from './store.js';
+import { describeError, type Problem } from '../core/errors';
+import { applyEvent, mergeEntries, newestSeq, oldestSeq, type TranscriptItem } from '../core/transcript';
+import { createStore, type Readable } from './store';
 
 const TAIL_SIZE = 60;
 const PAGE_SIZE = 200;

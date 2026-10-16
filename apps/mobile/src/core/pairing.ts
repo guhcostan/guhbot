@@ -6,7 +6,7 @@
  * the reasons in `endpoint.ts`, and it never throws: a bad link produces a
  * sentence the user can act on.
  */
-import { normalizeHost, parsePort, type HostEndpoint } from './endpoint.js';
+import { normalizeHost, parsePort, type HostEndpoint } from './endpoint';
 
 export const PAIRING_SCHEME = 'guhbot';
 export const PAIRING_ACTION = 'pair';

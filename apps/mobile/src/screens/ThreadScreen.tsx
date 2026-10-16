@@ -3,15 +3,15 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useEffect, useRef, type ReactElement } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { EmptyState } from '../components/Avatar.js';
-import { ConnectionBanner } from '../components/ConnectionBanner.js';
-import { NoticeCard } from '../components/NoticeCard.js';
-import { Screen } from '../components/Screen.js';
-import { shortTime } from '../core/format.js';
-import { isPending, type TranscriptItem } from '../core/transcript.js';
-import type { RootStackParamList } from '../navigation/types.js';
-import { useAppState, useAppStore, useTranscriptState, useTranscriptStore } from '../state/provider.js';
-import { colors, fontSize, radius, spacing } from '../theme.js';
+import { EmptyState } from '../components/Avatar';
+import { ConnectionBanner } from '../components/ConnectionBanner';
+import { NoticeCard } from '../components/NoticeCard';
+import { Screen } from '../components/Screen';
+import { shortTime } from '../core/format';
+import { isPending, type TranscriptItem } from '../core/transcript';
+import type { RootStackParamList } from '../navigation/types';
+import { useAppState, useAppStore, useTranscriptState, useTranscriptStore } from '../state/provider';
+import { colors, fontSize, radius, spacing } from '../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Thread'>;
 

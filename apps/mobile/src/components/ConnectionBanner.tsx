@@ -1,8 +1,8 @@
 import type { ReactElement } from 'react';
-import type { ConnectionView } from '../core/device.js';
+import type { ConnectionView } from '../core/device';
 
-import { toneFromConnection } from '../theme.js';
-import { NoticeCard } from './NoticeCard.js';
+import { toneFromConnection } from '../theme';
+import { NoticeCard } from './NoticeCard';
 
 /**
  * Nothing is shown while the link is healthy: a permanent green strip is noise.

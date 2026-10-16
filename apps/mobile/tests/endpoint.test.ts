@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { describeEndpoint, normalizeHost, parseEndpoint, parsePort, rpcUrl } from '../src/core/endpoint.js';
+import { describeEndpoint, normalizeHost, parseEndpoint, parsePort, rpcUrl } from '../src/core/endpoint';
 
 describe('host addresses', () => {
   it('normalizes the forms a user can type', () => {

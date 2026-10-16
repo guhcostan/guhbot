@@ -23,14 +23,14 @@ import {
   type RpcError,
 } from '@guhbot/protocol';
 
-import { capabilityFor } from '../core/capabilities.js';
-import { connectionView, type ConnectionView } from '../core/device.js';
-import type { HostEndpoint } from '../core/endpoint.js';
-import { describeError, type Problem } from '../core/errors.js';
-import type { Connection, ConnectionSnapshot, HostConnectionOptions } from '../host/connection.js';
-import { pairingMessage } from '../host/pairing.js';
-import type { PersistedHost, SessionStore } from '../host/storage.js';
-import { createStore, type Readable } from './store.js';
+import { capabilityFor } from '../core/capabilities';
+import { connectionView, type ConnectionView } from '../core/device';
+import type { HostEndpoint } from '../core/endpoint';
+import { describeError, type Problem } from '../core/errors';
+import type { Connection, ConnectionSnapshot, HostConnectionOptions } from '../host/connection';
+import { pairingMessage } from '../host/pairing';
+import type { PersistedHost, SessionStore } from '../host/storage';
+import { createStore, type Readable } from './store';
 
 export type AppStatus = 'starting' | 'unpaired' | 'paired';
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { connectionView, defaultDeviceName, devicePlatformFor } from '../src/core/device.js';
+import { connectionView, defaultDeviceName, devicePlatformFor } from '../src/core/device';
 
 describe('device description', () => {
   it('maps the platform React Native reports onto the protocol vocabulary', () => {

@@ -3,9 +3,9 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { ReactElement } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import type { RootStackParamList } from '../navigation/types.js';
-import { useAppState } from '../state/provider.js';
-import { colors, spacing } from '../theme.js';
+import type { RootStackParamList } from '../navigation/types';
+import { useAppState } from '../state/provider';
+import { colors, spacing } from '../theme';
 
 export function AgentsHeaderButtons(): ReactElement {
   const state = useAppState();

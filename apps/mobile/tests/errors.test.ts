@@ -1,7 +1,7 @@
 import type { RpcError } from '@guhbot/protocol';
 import { describe, expect, it } from 'vitest';
 
-import { describeError, isForbidden, isRpcError } from '../src/core/errors.js';
+import { describeError, isForbidden, isRpcError } from '../src/core/errors';
 
 describe('describeError', () => {
   it('treats a refusal as a normal outcome with a way forward', () => {

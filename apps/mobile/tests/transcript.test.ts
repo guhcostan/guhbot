@@ -11,7 +11,7 @@ import {
   newestSeq,
   oldestSeq,
   type TranscriptItem,
-} from '../src/core/transcript.js';
+} from '../src/core/transcript';
 
 const AGENT = 'ag_1';
 const RUN = 'run_1';
