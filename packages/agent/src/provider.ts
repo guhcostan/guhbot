@@ -25,6 +25,11 @@ export type StopReason = 'end' | 'tool-calls' | 'length' | 'refusal' | 'error';
 
 export type ModelEvent =
   | { type: 'text-delta'; text: string }
+  /**
+   * Reasoning tokens, for models that emit them separately. The loop keeps these
+   * out of the transcript but must hand them back on the next request.
+   */
+  | { type: 'reasoning-delta'; text: string }
   | { type: 'tool-call'; call: ToolCall }
   | { type: 'usage'; inputTokens: number; outputTokens: number }
   | { type: 'stop'; reason: StopReason; error?: string };

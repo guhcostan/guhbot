@@ -43,6 +43,8 @@ export interface StdioTransportOptions extends TransportHooks {
   allowStdio: boolean;
   /** How long a server gets to exit on SIGTERM before SIGKILL. */
   killGraceMs?: number | undefined;
+  /** Called once when the child exits, so the owner can mark it dead. */
+  onExit?: ((message: string) => void) | undefined;
 }
 
 export class StdioTransport implements McpTransport {
@@ -73,6 +75,9 @@ export class StdioTransport implements McpTransport {
           'a stdio server is arbitrary code execution, so it needs an explicit opt-in. ' +
           'Pass allowStdio: true (and a human decision to run it) before configuring a stdio server.',
       );
+    }
+    if (this.closing) {
+      throw new McpError('closed', `MCP server "${this.options.serverName}" has already been closed`);
     }
     if (this.child) return;
 
@@ -125,10 +130,12 @@ export class StdioTransport implements McpTransport {
       this.exit = { code, signal };
       untrackChild(child);
       if (this.child === child) this.child = null;
+      const message = `exited ${describeExit(code, signal)}`;
+      this.options.onExit?.(message);
       this.fail(
         new McpError(
           'closed',
-          `MCP server "${this.options.serverName}" exited ${describeExit(code, signal)} while a request was in flight`,
+          `MCP server "${this.options.serverName}" ${message} while a request was in flight`,
         ),
       );
     });
@@ -152,6 +159,14 @@ export class StdioTransport implements McpTransport {
 
     try {
       this.write(encodeMessage(message));
+    } catch (error) {
+      // The request never reached the wire, so its pending entry would only
+      // turn into an unhandled rejection at the timeout.
+      this.pending.cancel(id, error instanceof Error ? error : new McpError('closed', String(error)));
+      throw error;
+    }
+
+    try {
       return await promise;
     } finally {
       link.signal.removeEventListener('abort', onAbort);
@@ -175,7 +190,7 @@ export class StdioTransport implements McpTransport {
   }
 
   /** Last stderr lines, for diagnostics. Never placed in a tool result. */
-  stderrTail(): string[] {
+  recentStderr(): string[] {
     return [...this.stderrTail];
   }
 
@@ -309,11 +324,13 @@ export function terminate(child: ChildProcess, graceMs: number): Promise<void> {
 
   return new Promise<void>((resolve) => {
     let settled = false;
+    let termTimer: NodeJS.Timeout | undefined;
+    let killTimer: NodeJS.Timeout | undefined;
     const finish = (): void => {
       if (settled) return;
       settled = true;
-      clearTimeout(termTimer);
-      clearTimeout(killTimer);
+      if (termTimer) clearTimeout(termTimer);
+      if (killTimer) clearTimeout(killTimer);
       resolve();
     };
 
@@ -325,7 +342,7 @@ export function terminate(child: ChildProcess, graceMs: number): Promise<void> {
       return;
     }
 
-    const termTimer = setTimeout(() => {
+    termTimer = setTimeout(() => {
       try {
         child.kill('SIGKILL');
       } catch {
@@ -334,7 +351,7 @@ export function terminate(child: ChildProcess, graceMs: number): Promise<void> {
     }, graceMs);
     // The child process handle keeps the event loop alive, so these timers run;
     // they are unref'd so a forcible shutdown path is never delayed by them.
-    const killTimer = setTimeout(finish, graceMs * 2 + 1000);
+    killTimer = setTimeout(finish, graceMs * 2 + 1000);
     termTimer.unref?.();
     killTimer.unref?.();
   });

@@ -54,6 +54,9 @@ interface ChatCompletionChunk {
     index?: number;
     delta?: {
       content?: string | null;
+      /** DeepSeek-style reasoning stream. Other vendors use `reasoning`. */
+      reasoning_content?: string | null;
+      reasoning?: string | null;
       tool_calls?: StreamingToolCallFragment[];
     };
     finish_reason?: string | null;
@@ -97,11 +100,26 @@ export class OpenAiCompatibleProvider implements ModelProvider {
           role: 'assistant',
           // An assistant turn that only calls tools must send null content, not "".
           content: typeof message.content === 'string' && message.content.length > 0 ? message.content : null,
+          // Reasoning models reject a follow-up that drops their own reasoning,
+          // so it is echoed back verbatim when we have it.
+          ...(message.reasoning !== undefined && message.reasoning.length > 0
+            ? { reasoning_content: message.reasoning }
+            : {}),
           tool_calls: message.toolCalls.map((call) => ({
             id: call.id,
             type: 'function',
             function: { name: call.name, arguments: call.rawArguments },
           })),
+        });
+        continue;
+      }
+      if (message.role === 'assistant') {
+        out.push({
+          role: 'assistant',
+          content: typeof message.content === 'string' ? message.content : toContentArray(message.content),
+          ...(message.reasoning !== undefined && message.reasoning.length > 0
+            ? { reasoning_content: message.reasoning }
+            : {}),
         });
         continue;
       }
@@ -183,6 +201,12 @@ export class OpenAiCompatibleProvider implements ModelProvider {
       if (choice?.delta?.content) {
         sawText = true;
         yield { type: 'text-delta', text: choice.delta.content };
+      }
+
+      const reasoning = choice?.delta?.reasoning_content ?? choice?.delta?.reasoning;
+      if (reasoning) {
+        sawText = true;
+        yield { type: 'reasoning-delta', text: reasoning };
       }
 
       for (const fragment of choice?.delta?.tool_calls ?? []) {

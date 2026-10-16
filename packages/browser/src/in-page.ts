@@ -27,6 +27,8 @@ interface InPageElement {
   readonly parentElement: InPageElement | null;
   readonly textContent: string | null;
   readonly innerText?: string;
+  /** Live property, so a field reflects what was typed, not its initial attribute. */
+  readonly value?: string;
   getAttribute(name: string): string | null;
   hasAttribute(name: string): boolean;
   matches(selector: string): boolean;
@@ -38,6 +40,7 @@ interface InPageDocument {
   readonly title: string;
   readonly location: { readonly href: string };
   querySelector(selector: string): InPageElement | null;
+  querySelectorAll(selector: string): ArrayLike<InPageElement>;
 }
 
 declare const document: InPageDocument;
@@ -91,10 +94,19 @@ export function extractPageInPage(args: ExtractArgs): ExtractResult {
     return (value ?? '').replace(/\s+/g, ' ').trim();
   }
 
+  // `display: none` does not inherit as a computed value, so hiding is an
+  // ancestor question: a visible child of a hidden subtree is still hidden.
   function visible(element: InPageElement): boolean {
     if (element.closest('[hidden], [aria-hidden="true"]') !== null) return false;
-    const style = getComputedStyle(element);
-    return style.display !== 'none' && style.visibility !== 'hidden';
+    let node: InPageElement | null = element;
+    let depth = 0;
+    while (node !== null && depth < 32) {
+      depth += 1;
+      const style = getComputedStyle(node);
+      if (style.display === 'none' || style.visibility === 'hidden') return false;
+      node = node.parentElement;
+    }
+    return true;
   }
 
   function tagOf(element: InPageElement): string {
@@ -122,7 +134,7 @@ export function extractPageInPage(args: ExtractArgs): ExtractResult {
         parts.unshift(`#${id}`);
         break;
       }
-      const parent = node.parentElement;
+      const parent: InPageElement | null = node.parentElement;
       let part = tag;
       if (parent !== null) {
         const sameTag = Array.from(parent.children).filter((child) => tagOf(child) === tag);
@@ -200,8 +212,8 @@ export function extractPageInPage(args: ExtractArgs): ExtractResult {
   const container = root ?? body ?? document.querySelector('html');
   const found = container === null ? [] : Array.from(container.querySelectorAll(INTERACTIVE));
   const elements: RawElement[] = [];
+  let visibleCount = 0;
   for (const element of found) {
-    if (elements.length >= args.maxElements) break;
     if (!visible(element)) continue;
     const tag = tagOf(element);
     const hrefRaw = element.getAttribute('href');
@@ -209,14 +221,17 @@ export function extractPageInPage(args: ExtractArgs): ExtractResult {
     const label = collapse(labelOf(element, tag));
     if (tag === 'a' && href === null) continue;
     if (label === '') continue;
+    const kind = classify(element, tag, href);
+    visibleCount += 1;
+    if (elements.length >= args.maxElements) continue;
     elements.push({
       ref: elements.length + 1,
       tag,
-      kind: classify(element, tag, href),
+      kind,
       label: label.length > 160 ? `${label.slice(0, 157)}...` : label,
       selector: cssPath(element),
       href,
-      value: tag === 'input' || tag === 'select' || tag === 'textarea' ? collapse(element.getAttribute('value')) || null : null,
+      value: kind === 'field' ? collapse(typeof element.value === 'string' ? element.value : element.getAttribute('value')) || null : null,
     });
   }
 
@@ -226,7 +241,9 @@ export function extractPageInPage(args: ExtractArgs): ExtractResult {
     text,
     totalChars,
     elements,
-    elementsTruncated: found.length > elements.length,
+    // Counted over *visible* candidates: hidden markup is not something the model
+    // is missing out on, so it must not be reported as truncation.
+    elementsTruncated: visibleCount > elements.length,
     scopeFound: true,
   };
 }
@@ -236,7 +253,7 @@ export function collectLinksInPage(args: LinkArgs): RawLink[] {
     return (value ?? '').replace(/\s+/g, ' ').trim();
   }
 
-  const anchors = Array.from(document.querySelectorAll('a[href]') as unknown as ArrayLike<InPageElement>);
+  const anchors = Array.from(document.querySelectorAll('a[href]'));
   const results: RawLink[] = [];
   const seen = new Set<string>();
 
@@ -258,15 +275,15 @@ export function collectLinksInPage(args: LinkArgs): RawLink[] {
     if (title.length < 2 || title.length > 300) continue;
 
     // The snippet is the surrounding block's text minus the title itself. Walk up
-    // a bounded number of levels: too few and the snippet is just the anchor,
-    // too many and every result shares the whole page.
+    // until an ancestor holds more than the anchor alone: stopping at `h3` gives
+    // no snippet, and walking all the way up gives every result the whole page.
     let snippet = '';
     let node = anchor.parentElement;
     let depth = 0;
     while (node !== null && depth < 4) {
       depth += 1;
       const text = collapse(node.textContent);
-      if (text.length > title.length + 20) {
+      if (text.length > title.length) {
         snippet = text.split(title).join(' ');
         break;
       }

@@ -2,16 +2,17 @@
  * What this device is allowed to do, decided before a request is sent.
  *
  * A phone pairs over the network, and the host only ever hands a remote device
- * the `background` class: `host.claimPairing` downgrades a `person` request to
+ * the `background` class: `Host.claimPairing` downgrades a `person` request to
  * `background`, and promoting a device needs local presence on the host. So for
  * this app the interesting answer is almost always "no, and here is why".
  *
- * The host is still the authority (see `Host.dispatch`); this module exists so
- * the UI can say so up front instead of showing a raw `forbidden` error.
+ * The host stays the authority (`Host.dispatch` re-checks everything); this
+ * module exists so the UI can show a disabled control with a reason instead of
+ * a raw `forbidden` error.
  */
-import { methodAuthz, type AuthzClass, type DeviceClass } from '@guhbot/protocol';
+import { methods, type AuthzClass, type DeviceClass, type MethodSpec } from '@guhbot/protocol';
 
-export type CapabilityReason = 'permitted' | 'unpaired' | 'device-class' | 'unknown-method';
+export type CapabilityReason = 'permitted' | 'unpaired' | 'device-class' | 'host-only' | 'unknown-method';
 
 export interface CapabilityAllowed {
   readonly allowed: true;
@@ -26,7 +27,7 @@ export interface CapabilityRefused {
   readonly requiredClass: AuthzClass | null;
   /** Short label for a disabled control. */
   readonly title: string;
-  /** Why it is refused and where the user has to go instead. */
+  /** Why it is refused, and where the user has to go instead. */
   readonly detail: string;
 }
 
@@ -34,9 +35,13 @@ export type Capability = CapabilityAllowed | CapabilityRefused;
 
 const HOST_MACHINE = 'Do it in guhbot on the machine that runs the host.';
 
+function specFor(method: string): MethodSpec | undefined {
+  return (methods as Record<string, MethodSpec | undefined>)[method];
+}
+
 export function capabilityFor(deviceClass: DeviceClass | null, method: string): Capability {
-  const required = methodAuthz(method);
-  if (required === undefined) {
+  const spec = specFor(method);
+  if (spec === undefined) {
     return {
       allowed: false,
       reason: 'unknown-method',
@@ -46,28 +51,36 @@ export function capabilityFor(deviceClass: DeviceClass | null, method: string): 
     };
   }
 
-  if (required === 'background') {
-    return { allowed: true, reason: 'permitted', requiredClass: required };
+  // `localOnly` methods are refused for every network client, whatever class it
+  // holds; the phone can never be the machine the host runs on.
+  if (spec.localOnly === true) {
+    return {
+      allowed: false,
+      reason: 'host-only',
+      requiredClass: spec.authz,
+      title: 'Only on the host machine',
+      detail: `The host only accepts "${method}" from a client running on the host itself, never over the network. ${HOST_MACHINE}`,
+    };
   }
 
   if (deviceClass === null) {
     return {
       allowed: false,
       reason: 'unpaired',
-      requiredClass: required,
+      requiredClass: spec.authz,
       title: 'Pair with a host first',
-      detail: `"${method}" needs a device the host has paired.`,
+      detail: `Nothing may be asked of a host until this phone has paired with it.`,
     };
   }
 
-  if (deviceClass === 'person') {
-    return { allowed: true, reason: 'permitted', requiredClass: required };
+  if (spec.authz === 'background' || deviceClass === 'person') {
+    return { allowed: true, reason: 'permitted', requiredClass: spec.authz };
   }
 
   return {
     allowed: false,
     reason: 'device-class',
-    requiredClass: required,
+    requiredClass: spec.authz,
     title: 'Needs a person on the host',
     detail:
       `"${method}" changes something on the host, so the host only accepts it from a device with human presence. ` +

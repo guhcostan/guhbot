@@ -43,6 +43,15 @@ export interface ChatMessage {
   content: string | ContentPart[];
   /** Assistant messages may request tools. */
   toolCalls?: ToolCall[];
+  /**
+   * Provider-supplied reasoning for this assistant turn.
+   *
+   * Reasoning models (DeepSeek's thinking mode, and others) reject a follow-up
+   * request that does not echo their own reasoning back. It is transport state
+   * for the provider, not conversation content, so it is never written to the
+   * transcript and never shown to a user.
+   */
+  reasoning?: string;
   /** Tool messages must name the call they answer. */
   toolCallId?: string;
   /** Free-form provider-specific fields that must survive a round trip. */

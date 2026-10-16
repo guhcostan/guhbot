@@ -85,6 +85,7 @@ export class AgentLoop implements RunExecutor {
       this.options.onRequest?.(messages);
 
       let assistantText = '';
+      let assistantReasoning = '';
       const requested: ToolCall[] = [];
       let stopReason: string | null = null;
       let errorText: string | null = null;
@@ -106,6 +107,10 @@ export class AgentLoop implements RunExecutor {
             // Ephemeral: the client renders this immediately, and the durable
             // entry is written once below.
             context.emitDelta(context.history.length + turns - 1, event.text);
+          } else if (event.type === 'reasoning-delta') {
+            // Kept out of the transcript on purpose: it is provider transport
+            // state, not something the user asked to see, and it is large.
+            assistantReasoning += event.text;
           } else if (event.type === 'tool-call') {
             requested.push(event.call);
           } else if (event.type === 'stop') {
@@ -178,7 +183,12 @@ export class AgentLoop implements RunExecutor {
 
       // Feed the turn back to the model. The assistant message has to carry the
       // tool_calls the results answer, or providers reject the request.
-      messages.push({ role: 'assistant', content: assistantText, toolCalls: requested });
+      messages.push({
+        role: 'assistant',
+        content: assistantText,
+        toolCalls: requested,
+        ...(assistantReasoning.length > 0 ? { reasoning: assistantReasoning } : {}),
+      });
       messages.push(...results);
     }
 

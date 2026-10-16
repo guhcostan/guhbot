@@ -274,6 +274,88 @@ describe('openai-compatible streaming', () => {
   });
 });
 
+describe('reasoning models', () => {
+  it('streams reasoning separately from visible text', async () => {
+    script = {
+      status: 200,
+      chunks: [
+        sse({ choices: [{ delta: { reasoning_content: 'Let me think. ' } }] }),
+        sse({ choices: [{ delta: { reasoning_content: 'Two plus two.' } }] }),
+        sse({ choices: [{ delta: { content: '4' } }] }),
+        sse({ choices: [{ delta: {}, finish_reason: 'stop' }] }),
+        'data: [DONE]\n\n',
+      ],
+    };
+    const events = await collect(
+      provider().stream({
+        model: 'm',
+        messages: [{ role: 'user', content: 'x' }],
+        tools: [],
+        system: undefined,
+        maxTokens: 10,
+        temperature: 0,
+        signal: new AbortController().signal,
+      }),
+    );
+
+    // Reasoning must not be mixed into the visible answer.
+    const text = events.filter((e) => e.type === 'text-delta').map((e) => (e as { text: string }).text).join('');
+    expect(text).toBe('4');
+    const reasoning = events
+      .filter((e) => e.type === 'reasoning-delta')
+      .map((e) => (e as { text: string }).text)
+      .join('');
+    expect(reasoning).toBe('Let me think. Two plus two.');
+  });
+
+  it('echoes reasoning back on the next request so thinking mode accepts it', async () => {
+    script = { status: 200, chunks: [sse({ choices: [{ delta: {}, finish_reason: 'stop' }] }), 'data: [DONE]\n\n'] };
+    await collect(
+      provider().stream({
+        model: 'm',
+        messages: [
+          { role: 'user', content: 'x' },
+          {
+            role: 'assistant',
+            content: '',
+            reasoning: 'I should call the tool.',
+            toolCalls: [{ id: 'c1', name: 't', arguments: {}, rawArguments: '{}', parseError: null }],
+          },
+          { role: 'tool', content: 'result', toolCallId: 'c1' },
+        ],
+        tools: [],
+        system: undefined,
+        maxTokens: 10,
+        temperature: 0,
+        signal: new AbortController().signal,
+      }),
+    );
+
+    const body = lastRequest?.body as { messages: { role: string; reasoning_content?: string }[] };
+    const assistant = body.messages.find((m) => m.role === 'assistant');
+    // Omitting this is what makes a reasoning model reject the follow-up with a
+    // 400, which is exactly what happened before this was fixed.
+    expect(assistant?.reasoning_content).toBe('I should call the tool.');
+  });
+
+  it('omits reasoning_content entirely when there is none', async () => {
+    script = { status: 200, chunks: [sse({ choices: [{ delta: {}, finish_reason: 'stop' }] }), 'data: [DONE]\n\n'] };
+    await collect(
+      provider().stream({
+        model: 'm',
+        messages: [{ role: 'assistant', content: 'hello' }],
+        tools: [],
+        system: undefined,
+        maxTokens: 10,
+        temperature: 0,
+        signal: new AbortController().signal,
+      }),
+    );
+    const body = lastRequest?.body as { messages: Record<string, unknown>[] };
+    expect(body.messages[0]).not.toHaveProperty('reasoning_content');
+  });
+});
+
 describe('request shaping', () => {
   it('sends the system prompt, tools and stream options in the provider shape', async () => {
     script = { status: 200, chunks: [sse({ choices: [{ delta: {}, finish_reason: 'stop' }] }), 'data: [DONE]\n\n'] };

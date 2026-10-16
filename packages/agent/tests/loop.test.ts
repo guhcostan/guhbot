@@ -266,6 +266,29 @@ describe('agent loop', () => {
     expect(entries.at(-1)?.kind).toBe('error');
   });
 
+  it('carries reasoning into the next turn but not into the transcript', async () => {
+    const provider = new ScriptedProvider([
+      [
+        { type: 'reasoning-delta', text: 'I need to echo.' },
+        { type: 'tool-call', call: { id: 'c1', name: 'echo', arguments: { text: 'hi' }, rawArguments: '{"text":"hi"}', parseError: null } },
+        { type: 'stop', reason: 'tool-calls' },
+      ],
+      [{ type: 'text-delta', text: 'done' }, { type: 'stop', reason: 'end' }],
+    ]);
+    const loop = new AgentLoop({ provider, tools: [echoTool], cwd: dir });
+    const { context, entries } = fakeContext();
+
+    await loop.execute(context, new AbortController().signal);
+
+    // Handed back to the provider so a reasoning model accepts the follow-up…
+    const second = provider.requests[1]!;
+    const assistant = second.messages.find((m) => m.role === 'assistant' && m.toolCalls !== undefined);
+    expect(assistant?.reasoning).toBe('I need to echo.');
+
+    // …but never shown to the user or persisted.
+    expect(entries.every((e) => !e.content.includes('I need to echo'))).toBe(true);
+  });
+
   it('includes agent instructions in the system prompt', async () => {
     const provider = new ScriptedProvider([[{ type: 'stop', reason: 'end' }]]);
     const loop = new AgentLoop({ provider, tools: [], cwd: dir });

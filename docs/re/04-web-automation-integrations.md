@@ -38,6 +38,22 @@ meaning — only quoted strings, regexes, numeric constants and protobuf field d
 minification and are therefore evidence. (5) Tag **PROVEN** (the cited bytes say it) / **INFERRED**
 (reasoning stated) / **UNKNOWN**.
 
+**Line-number convention and a material caveat (read this before using any citation).** Every `file:line`
+in this document refers to the **beautified** bundle on disk under `recon/beautified/`, and the number is the
+**first line of the cited construct**; where a range is given, the range covers the construct as read. Two
+things must be understood:
+
+- **The beautified bundles were regenerated mid-analysis** (all ten files share an mtime of 2026-10-16 09:42,
+  from a concurrent process in this workspace). That rewrite removed one leading line from each file — so
+  every line number captured before it was shifted **down by exactly one** — and it **renamed two files**:
+  `coordinator.beauty.js` → `node-agent-coordinator.beauty.js` and `exec-daemon.beauty.js` →
+  `local-exec-daemon.beauty.js`. All citations here have been re-based against the current files, and the
+  current filenames are used throughout. If the bundles are regenerated again, **re-derive the line numbers
+  from the quoted literals rather than trusting them**: every non-obvious claim quotes the exact literal it
+  rests on, and those literals are the durable evidence.
+- Consequently, treat line numbers as **navigational aids** and the **quoted literals as the evidence**. A
+  literal that appears exactly once in a bundle is a stable citation; a line number is not.
+
 **Standing caveats.**
 | # | Caveat |
 |---|---|
@@ -150,7 +166,7 @@ function $At(e) {
 | Access requires the sender's **session** to be the box partition *and* its **frame URL** to pass a second predicate | `main-app.beauty.js:107899-107901` | PROVEN |
 | Identity comes from `sender.session` / `senderFrame?.url` supplied by Electron, not from arguments | `main-app.beauty.js:108070-108072` | PROVEN |
 | The second predicate accepts only a VNC page (`/vnc.html`) that is loopback or an origin already seen on the partition | `main-app.beauty.js:107938-107941` | PROVEN |
-| Denial is reported as `reportDesktopEdgeFailureClass("box-vnc","trust-denial", <trust>:<method>)` | `main-app.beauty.js:107918-107931`, `108079-108081` | PROVEN |
+| Denial is reported as `reportDesktopEdgeFailureClass("box-vnc","trust-denial", <trust>:<method>)` | `main-app.beauty.js:107925-107935`, `108082` | PROVEN |
 | The backend just calls Electron `clipboard.readText()` / `writeText()` | `main-app.beauty.js:108076-108080` | PROVEN |
 
 ## 1.3 The webview preload, in full
@@ -236,7 +252,7 @@ positions declared inside the shared descriptors:
 Related: `chunk-computer-screen-preview-LY_WYUeq.js` (26,139 B), `demo-computer-wallpaper-BO7Ye4dV.jpg`,
 and a named network-diagnostic probe `computer-screen-websocket` that resolves `p.vncProxy?.primaryUrl`
 and reports `screen-websocket-unavailable` / `screen-websocket-connected`
-(`main-app.beauty.js:99047`, `99342-99348`). **INFERRED:** the box's websockify endpoint fronts both the
+(`main-app.beauty.js:99050`, `99342-99348`). **INFERRED:** the box's websockify endpoint fronts both the
 noVNC viewer and the computer-screen preview, so the user's on-screen image and the model's frames may share
 one transport — consistent with ports 6080/6081 in §3.4.
 
@@ -261,7 +277,7 @@ Only two `executeJavaScript` call sites exist on webview-like frames, both narro
 (`preload-vnc.beauty.js:1740-1744`). Separately, canvas frames get a gesture-gated external-link admission
 check:
 ```js
-// recon/beautified/main-core.beauty.js:28652-28677, abridged
+// recon/beautified/main-core.beauty.js:28658-28683, abridged
 var Hie = 1e3,
   jie = new Set(["http:", "https:", "mailto:", "tel:"]);
 …
@@ -501,7 +517,7 @@ with `Put`/`List`/`Delete` and team variants `SandSetupSecret|1 name 9|2 value 9
 | `storeSecret` has exactly two destinations: a **box environment variable** or a **channel credential field** (`platform` + `field`) | above | PROVEN |
 | `submitSecret` is scoped to an `entryId` **and a `sessionId`** — one agent session, not global | `34213` | PROVEN |
 | `storeSecret` is `background`; `submitSecret` is `person` | `node-agent-coordinator.beauty.js:32784-32785` | PROVEN |
-| Box secrets are **pushed**, not pulled | `setBoxSecrets({secrets})` (`background`), `getBoxSecretsStatus` (`person`), `carryBoxSecretsToBot({serverId, names[]})` (`person`) at `node-agent-coordinator.beauty.js:34429-34431`; auth table `32927-32930` | PROVEN |
+| Box secrets are **pushed**, not pulled | `setBoxSecrets({secrets})` (`background`), `getBoxSecretsStatus` (`person`), `carryBoxSecretsToBot({serverId, names[]})` (`person`) at `node-agent-coordinator.beauty.js:34421`, `34422`; auth table `32923`, `32893`, `32924` | PROVEN |
 | `carryBoxSecretsToBot` moves named secrets from the box to a **specific bot server** — how a team bot inherits credentials | `34432`; `main-app.beauty.js:41276` | PROVEN |
 | `getBoxSecretsStatus()` returns `{cardKeys: [...]}` | `main-app.beauty.js:89183` | PROVEN |
 | A bot's secret names = deduplicated union of local keystore keys and box `cardKeys` | `main-app.beauty.js:89183-89187` | PROVEN |
@@ -591,7 +607,7 @@ GrokBotConnectorGrantResolution :: UNSPECIFIED, ALLOWED, SKIPPED, ALWAYS_THIS_BO
 
 The policy vocabulary is shared:
 ```js
-// recon/beautified/node-agent-coordinator.beauty.js:33971-33974, abridged
+// recon/beautified/node-agent-coordinator.beauty.js:33975-33978, abridged
   cw = Ve(U("always_allow"), U("needs_approval"), U("blocked")),
   $$ = w({ scopes: xt(w({ tools: A(xt(cw)), reads: A(xt(cw)), writes: A(xt(cw)) })) }),
 ```
@@ -640,7 +656,7 @@ strings), `LSMinimumSystemVersion = 12.0`, `NSHumanReadableCopyright = "Copyrigh
 
 ## 3.2 The system-proxy resolver
 ```js
-// recon/beautified/main-core.beauty.js:20552-20557, abridged
+// recon/beautified/main-core.beauty.js:20558-20563, abridged
     childEnv: () => (i === null ? {} : { [Am]: JSON.stringify(i) }),
     loginFetch: () => globalThis.fetch,
     webSocketAgent: (x) => (i === null ? void 0 : sne(x)),
@@ -843,7 +859,7 @@ function Gw(e) {
 | Shape is exactly `sand-media://image/<32 lowercase hex>` with optional `?r=<n>` cache-buster | `Bw` / `Gw` / `cne` | PROVEN |
 | The id is a 128-bit hex token, not a path or filename — media is addressable only by opaque id | `cne` | PROVEN |
 | Path traversal is structurally impossible: any segment not matching 32 hex fails the parse | `Gw` returns `null` | PROVEN |
-| A second, unrelated hasher exists for media: SHA-256 over `` `sand-media\0${e}\0${t}` ``, base64url, first 22 chars (~132 bits), with domain separation | `SL(e, t)` at `main-core.beauty.js:21325-21327` | PROVEN |
+| A second, unrelated hasher exists for media: SHA-256 over `` `sand-media\0${e}\0${t}` ``, base64url, first 22 chars (~132 bits), with domain separation | `SL(e, t)` at `main-core.beauty.js:21324-21326` | PROVEN |
 | Requests matching `Ym` (protocol + host `image`) go to the injected handler; everything else falls through to `Kne` | `Xne` at `21593-21595` | PROVEN |
 | The CSP `img-src` host form `sand-media://image` matches `FT = "image"` | CSP vs `FT` | PROVEN |
 | `resolve-media` (named in `FINDINGS.md:54`) was not isolated; whether it is a channel or a function | — | **UNKNOWN** |
@@ -897,7 +913,7 @@ var Cnn = ["allow-scripts", "allow-popups", "allow-popups-to-escape-sandbox"],
 | `allow-same-origin` is **absent** — opaque origin, no access to host storage or cookies | absence in `Cnn` | PROVEN |
 | `allow-forms`, `allow-modals`, `allow-top-navigation`, `allow-pointer-lock`, `allow-presentation`, `allow-downloads` all **absent** | absence in `Cnn` | PROVEN |
 | `allow-popups-to-escape-sandbox` means a popup from a canvas is **not** sandboxed — the only escape hatch | `81632` | PROVEN |
-| Canvas link opens are additionally gated on a recent trusted gesture and an `http`/`https`/`mailto`/`tel` scheme (§1.6) | `main-core.beauty.js:28659-28684`; `main-app.beauty.js:108500` | PROVEN |
+| Canvas link opens are additionally gated on a recent trusted gesture and an `http`/`https`/`mailto`/`tel` scheme (§1.6) | `main-core.beauty.js:28658-28683`; `main-app.beauty.js:108500` | PROVEN |
 | A link-interception script (`canvasLinkHref`, reading `href` **and** `xlink:href`) is injected into canvas content | `nKe()` at `81635-81646`; channel `sand-canvas-frame-open-link` at `81527` | PROVEN |
 
 > **Security assessment.** The sandbox set is strong (opaque origin, no forms, no modals, no top-navigation).
@@ -1085,7 +1101,7 @@ remains on the desktop while the bot works. With `place_phone_call`/voice (§6) 
 | Tool disabling is **per server id**, as a record of string arrays | `mcpDisabledToolsByServerId` | PROVEN |
 | `mcpBoxServers: string[]` names which servers live on the box | `mcpBoxServers`; `listBoxMcpServers` is `background` | PROVEN |
 | `readMcpAppResource` args are `{serverIdentifier, resourceUri, agentId?, entryId?, sessionId?, documentSha256?}` | `Ws` at `node-agent-coordinator.beauty.js:34145-34151` | PROVEN |
-| `documentSha256` lets the caller pin the exact document revision | `Ws`; re-checked at `main-app.beauty.js:40894-40897` | PROVEN |
+| `documentSha256` lets the caller pin the exact document revision | `Ws` field at `node-agent-coordinator.beauty.js:34151`; re-checked at `node-agent-coordinator.beauty.js:38095` (`if (Ee?.method !== "readMcpAppResource" \|\| Ee.args.documentSha256 == null) return await fe();`) | PROVEN |
 | `callMcpAppTool` carries a **`userActivated`** boolean | `node-agent-coordinator.beauty.js:34364` | PROVEN |
 
 > **`userActivated` is the strongest single design fact here.** With the injected activation reporter (§5.5)
@@ -1148,7 +1164,7 @@ that reject custom schemes are forced onto the HTTPS or loopback paths.
 
 ## 5.4 `sand-mcp-app:` — the iframe protocol
 ```js
-// recon/beautified/main-core.beauty.js:20337-20377, abridged
+// recon/beautified/main-core.beauty.js:20337-20379, abridged
 var gc = "sand-mcp-app", bw = "app", Kl = new Map(), tne = 32;
 function xw(e) {
   let t = (0, LT.randomUUID)(), n = (0, LT.randomUUID)();
@@ -1183,7 +1199,7 @@ function Cw(e) { return () => e()?.checkFeatureGate("sand_mcp_apps", { disableEx
 | A disabled gate turns **every** request into `404`, not `403` | `if (!t()) return new Response(null, {status:404})` | PROVEN |
 | Malformed URL → `400`; unknown id → `404` | `nne` | PROVEN |
 | Leading slashes are stripped, so `sand-mcp-app://app///<uuid>` resolves identically | `n.pathname.replace(/^\/+/, "")` | PROVEN |
-| `vw(e,t)` detects a **popup**: referrer is an mcp-app URL but the current URL is not | `vw`; used in `will-frame-navigate` handling at `main-core.beauty.js:28681-28687` | PROVEN |
+| `vw(e,t)` detects a **popup**: referrer is an mcp-app URL but the current URL is not | `vw`; used in `will-frame-navigate` handling at `main-core.beauty.js:28694-28700` | PROVEN |
 | The whole subsystem is gated on `sand_mcp_apps`, which **defaults to `false`** | `main-app.beauty.js:48430`; `Cw` | PROVEN |
 | Requesting an app while gated off raises a typed error with a literal message | `main-app.beauty.js:94053`: `throw new st({ code: Zqe, detail: "MCP Apps are behind the sand_mcp_apps gate." })` | PROVEN |
 | An app document is capped at **8 MiB** | `DT = 8 * 1024 * 1024` at `main-core.beauty.js:20107`; helper `yw()` → `` `This MCP App document is larger than ${DT / (1024 * 1024)} MiB.` ``; code `hw = "mcp_app_saved_page_unavailable"` at `20106-20108` | PROVEN |
@@ -1200,7 +1216,7 @@ posts changes to `window.parent` with `targetOrigin: "*"`. It implements hystere
 while the parent has not yet applied the smaller height (`refusedHeight`, `shrunkTo`) — so a transient
 layout collapse cannot ratchet the iframe down.
 
-**(b) Activation reporter** (`ene`, `main-core.beauty.js:20265-20305`):
+**(b) Activation reporter** (`ene`, `main-core.beauty.js:20286-20306`):
 ```js
 // recon/beautified/main-core.beauty.js:20266-20282 and 20285-20306, abridged
   Qte = ["Escape","Alt","AltGraph","CapsLock","Control","Fn","FnLock","Hyper","Meta","NumLock",
@@ -1474,7 +1490,7 @@ GrokBotEmailSuppressionReason :: UNSPECIFIED, PERMANENT_BOUNCE, COMPLAINT, UNSUB
 | `disconnectChannel` / `refreshChannel` | person | `O5` | `41233-41234` |
 | `getListenerIntegrations` | `person` | none → reply `record` | `41129`, `74244`; `node-agent-coordinator.beauty.js:32830`, `34312`, `36916` |
 | `getListenerConnectUrl` | `person` | `{platform, forceOauth?, oauthRedirectUri}` | `41130-41134` |
-| `disconnectListenerPlatform` | `person` | `{platform}` | `41135` |
+| `disconnectListenerPlatform` | `person` | `{platform}` | `41134` |
 | `completeGithubConnect` | `person` | `{state, code?, installationId?, setupAction?, error?}` | `41136-41142` |
 
 ## 7.3 What a "listener" is
@@ -1630,7 +1646,7 @@ var D = [
 
 ## 8.4 Adaptive quality
 ```js
-// recon/beautified/preload-vnc.beauty.js:713-738, verbatim
+// recon/beautified/preload-vnc.beauty.js:709-737, verbatim
 var hn = {
   low: 6, high: 8, raiseAtMbps: 15, lowerBelowMbps: 11, maxEstimateMbps: 30,
   sampleWeight: 0.25, sampleMinBytes: 96 * 1024, sampleMinMessages: 3,
@@ -1741,7 +1757,7 @@ var L$ = w({ agentId: A(q()), filename: p(), bytesBase64: p() }),
 | `readAttachmentChunk` | `{agentId?, path, offset, length, videoPlayback?}` | random access; the `videoPlayback` hint lets a player request seek-friendly ranges | PROVEN |
 | `readAttachmentImage` | an object with at least the same `path` family (descriptor truncated in evidence) | — | PROVEN for existence |
 | `searchMedia` | `{query, limit?}` | search over the media store, distinct from attachment reads | PROVEN |
-| All attachment methods are `person`-class | `node-agent-coordinator.beauty.js:32929-32933`-region | an unattended agent cannot exfiltrate files by itself | PROVEN |
+| All attachment methods are `person`-class | `node-agent-coordinator.beauty.js:32929-32933` (auth classes: `setBoxSecrets: "background"` at 32923, `getBoxSecretsStatus: "person"` at 32893, `carryBoxSecretsToBot: "person"` at 32924) | an unattended agent cannot exfiltrate files by itself | PROVEN |
 
 ## 9.2 Staging
 ```js

@@ -201,6 +201,7 @@ export function isNavigationAllowed(rawUrl: string, allowedHosts: readonly strin
 
 export interface RequestDecision {
   readonly allowed: boolean;
+  /** `host` or `host:port`, so a blocked request names the port that differed. */
   readonly host: string;
   /** null when allowed. */
   readonly reason: string | null;
@@ -219,5 +220,8 @@ export interface RequestDecision {
 export function decideRequest(rawUrl: string, allowedHosts: readonly string[]): RequestDecision {
   const url = tryParse(rawUrl);
   const reason = navigationRefusal(rawUrl, allowedHosts);
-  return { allowed: reason === null, host: url?.hostname ?? '', reason };
+  // `host` rather than `hostname`: two servers on 127.0.0.1 with different ports
+  // are two different egress destinations, and a report that cannot tell them
+  // apart is useless to the operator reading it.
+  return { allowed: reason === null, host: url?.host ?? '', reason };
 }

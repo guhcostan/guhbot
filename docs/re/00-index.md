@@ -101,10 +101,10 @@ Full detail lives in the per-subsystem files; this is the map.
 | Agent runtime | Coordinator RPC server; 172 methods; `person`/`background` authorization | PROVEN |
 | Renderer API | One data-declared RPC edge of 308 methods behind `contextBridge` | PROVEN |
 | Local execution | `local-exec-daemon` as an Electron `utilityProcess`, allow/deny rule lists | PROVEN (policy precedence UNKNOWN) |
-| Web automation | Chromium-driven, cookie injection, WebAuthn via a signed helper, 1Password helper | PROVEN (mechanism), INFERRED (policy) |
-| Canvas / artifacts | Six privileged schemes incl. `sand-canvas`, `sand-html-preview`, `sand-mcp-app` | PROVEN |
-| MCP | Client plus **MCP Apps** hosted in a `sand-mcp-app:` iframe | PROVEN |
-| Voice | ConnectRPC `aiserver.v1.GrokBotService/VoiceCallHarnessSession` + `VoiceCallHarnessTool` | PROVEN |
+| Web automation | **No CDP/Playwright.** An in-app `<webview>`, a remote VM desktop over noVNC, and a macOS `computer_use_*` tool surface. Cookie injection + WebAuthn via signed native helpers | PROVEN |
+| Canvas / artifacts | Six privileged schemes, **no `bypassCSP`**, iframe sandbox without `allow-same-origin`, sub-second user-gesture link gate | PROVEN |
+| MCP | Three transports (stdio/http/sse); **MCP Apps** in a `sand-mcp-app:` iframe, gated off by default, with a `userActivated` check before any tool call | PROVEN |
+| Voice | A **WebSocket to `wss://api.x.ai/`** (no WebRTC anywhere); harness service `aiserver.v1.GrokBotService/VoiceCallHarness{Session,Tool}` | PROVEN |
 | macOS Messages | A dedicated worker reading `chat.db`, with a grant/approval flow | PROVEN |
 | Remote desktop | A VNC client preload with liveness/interactive/host-key channels | PROVEN |
 | Mobile | App Store metadata: multi-bot threads, teach-once routines, approval gates | From published description only |

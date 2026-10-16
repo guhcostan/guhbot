@@ -21,6 +21,28 @@ importers:
         specifier: ^5.0.4
         version: 5.0.4(@types/node@22.20.5)(vite@8.3.4(@types/node@22.20.5)(terser@5.51.2))
 
+  apps/cloud:
+    dependencies:
+      '@guhbot/agent':
+        specifier: workspace:*
+        version: link:../../packages/agent
+      '@guhbot/host-core':
+        specifier: workspace:*
+        version: link:../../packages/host-core
+      '@guhbot/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
+      '@guhbot/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      ws:
+        specifier: ^8.18.0
+        version: 8.22.0
+    devDependencies:
+      '@types/ws':
+        specifier: ^8.5.13
+        version: 8.18.2
+
   apps/desktop:
     dependencies:
       '@guhbot/agent':
@@ -164,6 +186,18 @@ importers:
       '@guhbot/protocol':
         specifier: workspace:*
         version: link:../protocol
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+
+  packages/messages:
+    dependencies:
+      '@guhbot/agent':
+        specifier: workspace:*
+        version: link:../agent
+      '@guhbot/host-core':
+        specifier: workspace:*
+        version: link:../host-core
       zod:
         specifier: ^3.24.1
         version: 3.25.76

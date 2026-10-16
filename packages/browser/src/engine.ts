@@ -1,8 +1,9 @@
 import { mkdir, writeFile } from 'node:fs/promises';
-import type { BrowserContext, Locator, Page, Route } from 'playwright-core';
+import type { BrowserContext, Locator, Page } from 'playwright-core';
 import type { RawElement, RawLink } from './in-page.js';
 import { collectLinksInPage, extractPageInPage } from './in-page.js';
 import { decideRequest } from './policy.js';
+import { assignRefs } from './refs.js';
 
 /**
  * The engine seam.
@@ -82,6 +83,12 @@ export interface ScreenshotResult {
   readonly height: number;
 }
 
+export interface NavigationResult {
+  readonly url: string;
+  /** HTTP status of the main document, or null when there was no response. */
+  readonly status: number | null;
+}
+
 export interface ActionResult {
   readonly url: string;
   /** True when the main frame changed document as part of this action. */
@@ -102,7 +109,7 @@ export interface BrowserEngine {
   readonly name: string;
   launch(): Promise<void>;
   isLaunched(): boolean;
-  open(url: string, budget: ReadBudget): Promise<PageSnapshot>;
+  navigate(url: string): Promise<NavigationResult>;
   read(budget: ReadBudget): Promise<PageSnapshot>;
   links(maxLinks: number): Promise<readonly RawLink[]>;
   screenshot(request: ScreenshotRequest): Promise<ScreenshotResult>;
@@ -131,6 +138,90 @@ export class EgressRefusedError extends Error {
     super(message);
     this.name = 'EgressRefusedError';
   }
+}
+
+/**
+ * The context options every browser start uses.
+ *
+ * Separate from `launchOnce` so the hardening is a value a test can read instead
+ * of a detail buried in a launch call. Everything here is a refusal of something:
+ *
+ *  - `chromiumSandbox: true` because Playwright defaults Chromium's sandbox to
+ *    *off*, and no argument is ever passed that could weaken it (`--no-sandbox`
+ *    would have to come from `args`, and `args` is not set).
+ *  - `acceptDownloads: false` because a download is a file write into host
+ *    storage driven by remote content. There is deliberately no flag to turn
+ *    this back on: doing it properly needs its own tool, its own path jail and
+ *    its own approval, not a boolean here.
+ *  - `serviceWorkers: 'block'` because a service worker outlives the page and
+ *    can keep talking to origins after the allow list stopped applying to it.
+ *  - no permissions, no CSP bypass, no certificate-error tolerance.
+ */
+export interface HardenedLaunchOptions {
+  readonly headless: boolean;
+  readonly chromiumSandbox: true;
+  readonly acceptDownloads: false;
+  readonly serviceWorkers: 'block';
+  readonly permissions: string[];
+  readonly bypassCSP: false;
+  readonly ignoreHTTPSErrors: false;
+  readonly viewport: { readonly width: number; readonly height: number };
+}
+
+export function hardenedLaunchOptions(options: { readonly headless: boolean }): HardenedLaunchOptions {
+  return {
+    headless: options.headless,
+    chromiumSandbox: true,
+    acceptDownloads: false,
+    serviceWorkers: 'block',
+    permissions: [],
+    bypassCSP: false,
+    ignoreHTTPSErrors: false,
+    viewport: { width: 1280, height: 800 },
+  };
+}
+
+/**
+ * The three members of Playwright's `Route` this package uses.
+ *
+ * Declared structurally so the guard can be tested against a fake route without
+ * a browser, and so nothing in this package's public types points at Playwright.
+ */
+export interface RouteLike {
+  request(): { url(): string };
+  continue(): Promise<unknown>;
+  abort(errorCode?: string): Promise<unknown>;
+}
+
+export interface BlockedRequest {
+  readonly host: string;
+  readonly url: string;
+  readonly reason: string;
+}
+
+/**
+ * The interceptor: one decision per request, including each hop of a redirect.
+ *
+ * A redirect is not a special case here, and that is the point — the browser
+ * issues a new request for the target of `Location:`, this handler sees it, and
+ * the hop that leaves the allow list is the hop that gets aborted. Subresources
+ * go through the same gate, so a page cannot be used to make the host fetch
+ * something the operator never allowed.
+ */
+export function createRequestGuard(
+  allowedHosts: readonly string[],
+  onBlocked: (blocked: BlockedRequest) => void,
+): (route: RouteLike) => Promise<void> {
+  return async (route: RouteLike): Promise<void> => {
+    const url = route.request().url();
+    const decision = decideRequest(url, allowedHosts);
+    if (decision.allowed) {
+      await route.continue().catch(() => undefined);
+      return;
+    }
+    onBlocked({ host: decision.host === '' ? url : decision.host, url, reason: decision.reason ?? 'not allowed' });
+    await route.abort('blockedbyclient').catch(() => undefined);
+  };
 }
 
 export function installHint(browser: BrowserKind): string {
@@ -188,7 +279,7 @@ export class NullEngine implements BrowserEngine {
     return false;
   }
 
-  async open(): Promise<PageSnapshot> {
+  async navigate(): Promise<NavigationResult> {
     throw new BrowserUnavailableError(NO_ENGINE_MESSAGE);
   }
 
@@ -268,23 +359,7 @@ export class PlaywrightEngine implements BrowserEngine {
     await mkdir(this.options.profileDir, { recursive: true, mode: 0o700 });
 
     const context = await playwright[this.options.browser]
-      .launchPersistentContext(this.options.profileDir, {
-        headless: this.options.headless,
-        // Chromium's sandbox defaults to *off* in Playwright, and the browser that
-        // a model drives is the last process that should run unsandboxed. No
-        // `args` are passed at all, so nothing can smuggle in `--no-sandbox`.
-        chromiumSandbox: true,
-        // Downloads are remote writes with a filesystem landing zone. Off unless a
-        // future option turns them on deliberately.
-        acceptDownloads: false,
-        // A service worker outlives the page and can keep talking to origins the
-        // allow list was never asked about.
-        serviceWorkers: 'block',
-        permissions: [],
-        bypassCSP: false,
-        ignoreHTTPSErrors: false,
-        viewport: { width: 1280, height: 800 },
-      })
+      .launchPersistentContext(this.options.profileDir, hardenedLaunchOptions({ headless: this.options.headless }))
       .catch((error: unknown) => {
         throw new BrowserUnavailableError(describeEngineFailure(error, this.options.browser));
       });
@@ -326,29 +401,26 @@ export class PlaywrightEngine implements BrowserEngine {
    * away from not being enforced at all.
    */
   private async installRequestGuard(context: BrowserContext): Promise<void> {
-    await context.route('**/*', async (route: Route) => {
-      const url = route.request().url();
-      const decision = decideRequest(url, this.options.allowedHosts);
-      if (decision.allowed) {
-        await route.continue().catch(() => undefined);
-        return;
-      }
-      this.lastRefusal = { url, reason: decision.reason ?? 'not allowed' };
-      const key = decision.host === '' ? url : decision.host;
-      this.blocked.set(key, (this.blocked.get(key) ?? 0) + 1);
-      await route.abort('blockedbyclient').catch(() => undefined);
-    });
+    await context.route(
+      '**/*',
+      createRequestGuard(this.options.allowedHosts, (blocked) => {
+        this.lastRefusal = { url: blocked.url, reason: blocked.reason };
+        this.blocked.set(blocked.host, (this.blocked.get(blocked.host) ?? 0) + 1);
+      }),
+    );
   }
 
-  async open(url: string, budget: ReadBudget): Promise<PageSnapshot> {
+  async navigate(url: string): Promise<NavigationResult> {
     await this.launch();
     const page = this.requirePage();
     try {
-      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: this.options.navigationTimeoutMs });
+      const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: this.options.navigationTimeoutMs });
+      this.snapshot = null;
+      this.currentUrl = page.url();
+      return { url: page.url(), status: response === null ? null : response.status() };
     } catch (error) {
       throw this.navigationFailure(url, error);
     }
-    return this.capture(budget);
   }
 
   async read(budget: ReadBudget): Promise<PageSnapshot> {
@@ -372,6 +444,7 @@ export class PlaywrightEngine implements BrowserEngine {
   }
 
   private async capture(budget: ReadBudget): Promise<PageSnapshot> {
+    const page = this.requirePage();
     const result = await page.evaluate(extractPageInPage, {
       selector: budget.selector,
       maxChars: Math.max(budget.maxBytes, 1024),
@@ -381,15 +454,26 @@ export class PlaywrightEngine implements BrowserEngine {
       // A selector that matches nothing is a user error, not an empty page.
       throw new Error(`no element matches the selector ${JSON.stringify(budget.selector)}`);
     }
-    this.snapshot = result.elements;
+
+    let shown = result.elements;
+    if (budget.selector === null || this.snapshot === null) {
+      // A full read is a fresh document view: renumber from 1.
+      this.snapshot = result.elements;
+    } else {
+      // A scoped read must not invalidate refs the model is already holding.
+      const assignment = assignRefs(this.snapshot, result.elements, budget.maxElements * 2);
+      this.snapshot = assignment.table;
+      shown = assignment.shown;
+    }
+
     this.currentUrl = result.url;
     return {
       url: result.url,
       title: result.title,
       text: result.text,
       totalChars: result.totalChars,
-      elements: result.elements,
-      elementsTruncated: result.elementsTruncated,
+      elements: shown,
+      elementsTruncated: result.elementsTruncated || shown.length < result.elements.length,
       blockedHosts: this.blockedHosts(),
     };
   }

@@ -12,16 +12,60 @@
  * `docker run`, all of which are easier to reason about with explicit flags.
  */
 import { parseArgs } from 'node:util';
+import { randomUUID } from 'node:crypto';
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { AgentLoop, OpenAiCompatibleProvider, builtinTools } from '@guhbot/agent';
-import { Host } from '@guhbot/host-core';
+import { Host, hashToken, newToken } from '@guhbot/host-core';
 import { HostServer, localAddresses } from './server.js';
 
 const VERSION = '0.1.0';
 
 function defaultDataDir(): string {
   return join(homedir(), '.guhbot');
+}
+
+
+/**
+ * Ensure this machine has an operator device, and return its token.
+ *
+ * A host on your own machine needs exactly one thing the pairing flow cannot
+ * give it: a `person`-class device for whoever is sitting at the keyboard.
+ * Without one, `runs.start` and `approvals.resolve` are unreachable from the
+ * terminal, and the host can only be observed, never driven.
+ *
+ * The token is written to `<dataDir>/operator.token` with mode 0600. That file
+ * is a credential, and the honest framing is that anything able to read it can
+ * already read the database and the master key next to it, so the file grants
+ * nothing that was not already available. Remote devices still have to pair and
+ * still join as `background`.
+ *
+ * The token is reused across restarts so a client does not have to re-read it
+ * every time.
+ */
+async function ensureOperatorToken(host: Host, dataDir: string): Promise<string> {
+  const tokenPath = join(dataDir, 'operator.token');
+  const existing = host.store.listDevices().find((d) => d.name === 'Operator (this machine)' && d.class === 'person');
+  if (existing && existsSync(tokenPath)) {
+    const token = readFileSync(tokenPath, 'utf8').trim();
+    if (host.authenticate(token) !== null) return token;
+    // Fall through and mint a fresh one; the old token no longer authenticates.
+  }
+
+  const token = newToken();
+  const { createHash } = await import('node:crypto');
+  const salt = createHash('sha256').update(`operator:${host.hostId}`).digest();
+  host.store.createDevice({
+    name: 'Operator (this machine)',
+    platform: 'cli',
+    deviceClass: 'person',
+    tokenSalt: salt,
+    tokenHash: hashToken(token, salt),
+  });
+  writeFileSync(tokenPath, token, { mode: 0o600 });
+  chmodSync(tokenPath, 0o600);
+  return token;
 }
 
 async function main(): Promise<void> {
@@ -34,6 +78,8 @@ async function main(): Promise<void> {
       model: { type: 'string' },
       'api-key-env': { type: 'string', default: 'GUHBOT_API_KEY' },
       'allowed-hosts': { type: 'string' },
+      'session-header': { type: 'string' },
+      workspace: { type: 'string' },
       mode: { type: 'string', default: 'self-hosted' },
       help: { type: 'boolean', default: false },
     },
@@ -53,6 +99,10 @@ async function main(): Promise<void> {
         '  --model <name>         Default model for agents',
         '  --api-key-env <name>   Env var holding the API key (default GUHBOT_API_KEY)',
         '  --allowed-hosts <csv>  Hosts http_fetch may reach (default: none)',
+        '  --session-header <n>   Send a fresh UUID under header <n> on every model',
+        '                         request. Some gateways refuse requests without one.',
+        '  --workspace <path>     Directory agents may read and write. Defaults to',
+        '                         <data-dir>/workspace, NOT the current directory.',
         '  --mode <m>             self-hosted | hosted (default self-hosted)',
         '',
       ].join('\n'),
@@ -68,6 +118,8 @@ async function main(): Promise<void> {
   const model = values.model ?? process.env['GUHBOT_MODEL'];
   const apiKey = process.env[values['api-key-env']];
   const allowedHosts = (values['allowed-hosts'] ?? '').split(',').map((h) => h.trim()).filter((h) => h.length > 0);
+  const sessionHeader = values['session-header'];
+  const workspace = values.workspace ?? join(dataDir, 'workspace');
 
   // A host without a provider still works: it serves transcripts and settings,
   // and reports inferenceReady: false so clients can explain why runs fail.
@@ -78,9 +130,18 @@ async function main(): Promise<void> {
             baseUrl,
             apiKey,
             ...(model !== undefined ? { defaultModel: model } : {}),
+            // A fresh id per request, because a routing gateway uses it to keep
+            // concurrent conversations apart.
+            ...(sessionHeader !== undefined
+              ? { headers: () => ({ [sessionHeader]: randomUUID() }) }
+              : {}),
           }),
           tools: builtinTools({ allowedHosts }),
-          cwd: process.cwd(),
+          // Defaulting to the current directory would hand an agent whatever
+          // repository you happened to launch the host from, node_modules and
+          // all. A dedicated workspace is the safe default; pointing it at a
+          // real project is a deliberate act.
+          cwd: workspace,
         })
       : undefined;
 
@@ -99,6 +160,10 @@ async function main(): Promise<void> {
     },
     ...(executor ? { executor } : {}),
   });
+
+  mkdirSync(workspace, { recursive: true });
+
+  const operatorToken = await ensureOperatorToken(host, dataDir);
 
   const server = new HostServer({
     host,
@@ -122,6 +187,8 @@ async function main(): Promise<void> {
       `  listening     ${addresses.map((a) => `http://${a}:${boundPort}`).join('  ')}`,
       `  inference     ${status.inferenceReady ? `ready (${model ?? 'provider default'})` : 'NOT CONFIGURED — set --base-url and --model'}`,
       `  reachable     ${values.lan ? 'from your network (LAN mode)' : 'from this machine only'}`,
+      `  workspace     ${workspace}`,
+      `  operator      ${join(dataDir, 'operator.token')}  (0600, person class)`,
       '',
     ].join('\n'),
   );
