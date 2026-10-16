@@ -2,10 +2,28 @@ packages:
   - "packages/*"
   - "apps/*"
 
-# esbuild ships a platform-specific binary via a postinstall script; vitest needs
-# it. Everything else is left unapproved so a dependency cannot silently run
-# arbitrary code at install time — see SECURITY.md.
+# Only these dependencies may run install-time scripts. Everything else is left
+# unapproved on purpose: a postinstall script is arbitrary code execution, and a
+# dependency should not get that for free.
 allowBuilds:
+  # esbuild ships a platform-specific binary this way; vitest needs it.
   esbuild: true
+  # Electron's postinstall downloads the platform binary. Required for the
+  # desktop app, and the reason the desktop package is the only one that pulls a
+  # large dependency at install time.
+  electron: true
+
+minimumReleaseAgeExclude:
+  - '@expo/cli@58.1.10'
+  - '@expo/metro-config@58.0.14'
+  - '@expo/package-manager@1.14.2'
+  - '@expo/prebuild-config@58.0.14'
+  - '@expo/router-server@58.0.14'
+  - babel-preset-expo@58.0.16
+  - expo-asset@58.0.16
+  - expo-modules-core@58.0.20
+  - expo-modules-jsi@58.0.14
+  - expo@58.0.12
+  - react-native@0.88.0
 
 onlyBuiltDependencies: []

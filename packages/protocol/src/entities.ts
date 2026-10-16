@@ -196,8 +196,11 @@ export type DevicePlatform = z.infer<typeof DevicePlatformSchema>;
 
 /**
  * Every connected client is a Device. A device's `class` decides which methods
- * it may call: `person` devices have been unlocked by a human and may resolve
- * approvals; `background` devices may only drive work that needs no presence.
+ * it may call: a `person` device was created in the presence of a human (either
+ * in-process on the host, or by a person-class device deliberately minting a
+ * pairing code) and may resolve approvals. A `background` device, which is what
+ * a phone that redeemed a code always becomes, may only drive work that needs
+ * no presence.
  */
 export const DeviceClassSchema = z.enum(['person', 'background']);
 export type DeviceClass = z.infer<typeof DeviceClassSchema>;

@@ -1,0 +1,38 @@
+{
+  "name": "@guhbot/browser",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Browser automation capability: allow-listed navigation, ref-addressed clicking and typing, bounded text extraction.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b"
+  },
+  "dependencies": {
+    "@guhbot/agent": "workspace:*",
+    "@guhbot/host-core": "workspace:*",
+    "@guhbot/protocol": "workspace:*",
+    "zod": "^3.24.1"
+  },
+  "peerDependencies": {
+    "playwright-core": "^1.40.0"
+  },
+  "peerDependenciesMeta": {
+    "playwright-core": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "playwright-core": "^1.64.1"
+  }
+}

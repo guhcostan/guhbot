@@ -1,0 +1,19 @@
+{
+  "expo": {
+    "name": "guhbot",
+    "slug": "guhbot",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "scheme": "guhbot",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "bot.guhbot.mobile"
+    },
+    "android": {
+      "package": "bot.guhbot.mobile"
+    },
+    "plugins": ["expo-secure-store"]
+  }
+}

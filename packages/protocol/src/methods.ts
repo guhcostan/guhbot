@@ -12,7 +12,8 @@
  *   - `background` — safe to invoke with no human present. Observation, and the
  *     housekeeping an always-on agent needs. A stolen paired device can read a
  *     transcript; it cannot spend money or send a message as you.
- *   - `person` — requires a device that a human unlocked in this session.
+ *   - `person` — requires a person-class device, meaning one a human created
+ *                while physically present.
  *     Anything that mutates durable state, sends a message outward, resolves an
  *     approval, or moves money.
  *
@@ -116,6 +117,20 @@ export const methods = {
     }),
     'Mint a short-lived pairing code on the host. Host console only.',
     true,
+  ),
+  // A person-class device (the desktop app, where the user is sitting) may mint a
+  // code for a new device. This is distinct from `pairing.begin`, which is
+  // console-only: the distinction is that one is a human deciding to add a
+  // phone, and the other is the host operator bootstrapping the very first client.
+  'pairing.beginForDevice': spec(
+    'person',
+    Empty,
+    z.object({
+      pairingId: IdSchema,
+      code: z.string().length(8),
+      expiresAt: z.string().datetime({ offset: true }),
+    }),
+    'Mint a pairing code for a new device, from a device with human presence.',
   ),
   'pairing.claim': spec(
     'background',

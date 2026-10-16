@@ -1640,9 +1640,17 @@ plus `verifyPasskeyEnrollmentCode`, `beginPasskeyRegistration`, `listPasskeys`, 
 `listChromeCookieAllowItems`
 plus `importChromeCookies`, `listCookieOriginGrants`, `putCookieOriginGrants`, `leaveMeeting` (@3936-3939)
 
-Group totals sum to the observed 308 declared methods. **PROVEN** by direct extraction over
-`preload.beauty.js:3493-3945`; the grouping labels are **INFERRED** from the names and are not present in
-the bundle.
+**On the counts.** The `308` figure is **PROVEN** by two independent mechanical extractions over
+`recon/beautified/preload.beauty.js:3493-3945`: every one of the 308 occurrences of the pattern
+`<name>: t().` in that range sits at exactly six-space indentation inside the `methods: { ... }` block, and
+there are no occurrences of that pattern at any other indentation in the range. Of the 308, 99 use
+`t().noArgs` and the rest use `t().args({...})`.
+
+The **grouping labels and the per-group counts in parentheses are INFERRED** from the method names and are
+not present in the bundle. Each group also lists some methods in a trailing "plus ..." run; a method named in
+one group's trailing run is not repeated in the next group's count. The parenthetical counts are therefore
+indicative of group size, not exact, and they deliberately do not sum to 308 - the mechanically exact total
+is the 308 stated above. Treat the group names as a navigation aid, not as a schema.
 
 #### `desktop.boot`
 
@@ -2272,21 +2280,16 @@ chunks `chunk-<group>-<hash>.js` where `<group>` is a source-tree grouping:
 The singleton names (the remaining 266) fall into recognisable families. The most informative ~100, grouped.
 Every name below is a literal filename stem from `ls`; the group labels are **INFERRED** from the names.
 
-**Language grammars for the syntax highlighter / code viewer (about 80 names)**: `chunk-abnfDiagram-VRR7QNED`,
-`chunk-asm`, `chunk-astro`, `chunk-c`, `chunk-clojure`, `chunk-cmake`, `chunk-cpp`, `chunk-crystal`,
-`chunk-csharp`, `chunk-css`, `chunk-dart`, `chunk-dockerfile`, `chunk-dotenv`, `chunk-elixir`, `chunk-elm`,
-`chunk-erb`, `chunk-erlang`, `chunk-fish`, `chunk-fsharp`, `chunk-glsl`, `chunk-go`, `chunk-graphql`,
-`chunk-groovy`, `chunk-haml`, `chunk-haskell`, `chunk-hcl`, `chunk-hlsl`, `chunk-html`,
-`chunk-html-derivative`, `chunk-ini`, `chunk-java`, `chunk-javascript`, `chunk-json`, `chunk-json5`,
-`chunk-jsonc`, `chunk-jsx`, `chunk-julia`, `chunk-kotlin`, `chunk-latex`, `chunk-less`, `chunk-lisp`,
-`chunk-lua`, `chunk-makefile`, `chunk-markdown`, `chunk-mdx`, `chunk-nginx`, `chunk-nim`, `chunk-objective-c`,
-`chunk-objective-cpp`, `chunk-ocaml`, `chunk-perl`, `chunk-php`, `chunk-postcss`, `chunk-powershell`,
-`chunk-prisma`, `chunk-python`, `chunk-r`, `chunk-regexp`, `chunk-rst`, `chunk-ruby`, `chunk-rust`,
-`chunk-sass`, `chunk-scala`, `chunk-scss`, `chunk-shellscript`, `chunk-sql`, `chunk-svelte`, `chunk-swift`,
-`chunk-terraform`, `chunk-toml`, `chunk-tsx`, `chunk-typescript`, `chunk-vue`, `chunk-xml`, `chunk-yaml`,
-`chunk-zig`. This is a Shiki-style embedded-grammar set: `chunk-shiki-token-cache` and
-`chunk-DefaultCode` co-occur, and `chunk-wipe-navigation`, `chunk-code-body`, `chunk-fullscreen-file-viewer-body`
-and `chunk-file-stage` are its consumers.
+**Language grammars for the syntax highlighter / code viewer (~80 names)**: a Shiki-style embedded-grammar
+set. Full span: `abnfDiagram`, `asm`, `astro`, `c`, `clojure`, `cmake`, `cpp`, `crystal`, `csharp`, `css`,
+`dart`, `dockerfile`, `dotenv`, `elixir`, `elm`, `erb`, `erlang`, `fish`, `fsharp`, `glsl`, `go`, `graphql`,
+`groovy`, `haml`, `haskell`, `hcl`, `hlsl`, `html`, `html-derivative`, `ini`, `java`, `javascript`, `json`,
+`json5`, `jsonc`, `jsx`, `julia`, `kotlin`, `latex`, `less`, `lisp`, `lua`, `makefile`, `markdown`, `mdx`,
+`nginx`, `nim`, `objective-c`, `objective-cpp`, `ocaml`, `perl`, `php`, `postcss`, `powershell`, `prisma`,
+`python`, `r`, `regexp`, `rst`, `ruby`, `rust`, `sass`, `scala`, `scss`, `shellscript`, `sql`, `svelte`,
+`swift`, `terraform`, `toml`, `tsx`, `typescript`, `vue`, `xml`, `yaml`, `zig` (each in a
+`chunk-<grammar>-<hash>.js` file). Supporting chunks: `chunk-shiki-token-cache`, `chunk-DefaultCode`, and the
+consumers `chunk-wipe-navigation`, `chunk-code-body`, `chunk-fullscreen-file-viewer-body`, `chunk-file-stage`.
 
 **Mermaid diagram renderers (about 40 names)**: `chunk-mermaid.core`, `chunk-dagre-VKFMJZFB`,
 `chunk-cose-bilkent-JH36ORCC`, plus per-diagram chunks `chunk-arc`, `chunk-architectureDiagram-ZJ3FMSHR`,
@@ -2572,45 +2575,32 @@ reading `preload.cjs` directly, and REA's view of that file is `partial`. Claims
 therefore grounded in the *file contents*, not in REA's graph, wherever the two could differ - and every
 quantitative statement that comes from REA is labelled as such.
 
-### 8.5 REA's stated limitations, verbatim (all 13)
+### 8.5 REA's stated limitations
 
-Reproduced in full so a downstream reader can judge each claim. Order preserved.
+`normalized_result.limitations` holds 13 strings, reproduced here in order; the ones that shape this
+document are quoted verbatim and the rest are summarised faithfully so nothing is hidden.
 
-1. "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the
-   inventoried artifact container."
-2. "Dynamic IPC channel expressions remain unresolved and are never paired by textual similarity."
-3. "Electron API identity follows proven lexical module aliases and structurally verified module-namespace
-   interop. Other reassignments, dynamic selections, and visibly overwritten namespace members are
-   unresolved; missing findings do not establish absence. Arbitrary call side effects and runtime
-   registration are not evaluated."
-4. "Electron relationships are derived from inert syntax; runtime registration, reachability, defaults, and
-   enforcement remain unproven."
-5. "Graph coverage is incomplete; unavailable facts remain explicit and must not be read as absence."
-6. "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed."
-7. "Primitive string-byte budget exceeded (maximum 1048576 estimated JSON bytes)."
-8. "Sender, frame, URL, and origin checks are observations only; REA does not claim that they enforce a
-   complete authorization policy."
-9. "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime
-   execution."
-10. "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated."
-11. "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle
-    bootstrap code."
-12. "dist/electron-main/main-app.cjs: Resource constraint during analyze_javascript_application: Maximum call
-    stack size exceeded"
-13. `semantic_graph.limitations` adds the cap statement (paraphrased here because it is a structured field,
-    not a string): the semantic graph is truncated at the configured node ceiling.
+| # | Limitation | Effect on this document |
+|---|---|---|
+| 1 | "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container." | Bundling is invisible to REA; this document reads the bundles directly. |
+| 2 | "Dynamic IPC channel expressions remain unresolved and are never paired by textual similarity." | Directly explains `dynamic_channel_operations: 13` (5.3). |
+| 3 | "Electron API identity follows proven lexical module aliases and structurally verified module-namespace interop. Other reassignments, dynamic selections, and visibly overwritten namespace members are unresolved; missing findings do not establish absence. Arbitrary call side effects and runtime registration are not evaluated." | Explains the missed WebAuthn window (3.2) and the missed `__duneReliability` exposure (4.1). |
+| 4 | "Electron relationships are derived from inert syntax; runtime registration, reachability, defaults, and enforcement remain unproven." | Why section 3.1(c) refuses to infer `sandbox` from omission. |
+| 5 | "Graph coverage is incomplete; unavailable facts remain explicit and must not be read as absence." | General caveat. |
+| 6 | "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed." | Nothing here is a runtime observation. |
+| 7 | **"Primitive string-byte budget exceeded (maximum 1048576 estimated JSON bytes)."** | Why `ipc-channel` nodes carry `channel_expression` (e.g. `$t`, `Yt`, `AHe`) instead of the resolved literal. This document recovered all 21 literals by direct `grep -oE '"sand:[a-z0-9-]+"'` over the beautified bundles. |
+| 8 | "Sender, frame, URL, and origin checks are observations only; REA does not claim that they enforce a complete authorization policy." | Why 4.5 reports `senderFrame === mainFrame` as an observation, not a guarantee. |
+| 9 | "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution." | Applies to 1.6 and 7.1. |
+| 10 | "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated." | Applies to every `preload_path: null`. |
+| 11 | "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code." | Module factories were never run. |
+| 12 | **"dist/electron-main/main-app.cjs: Resource constraint during analyze_javascript_application: Maximum call stack size exceeded"** | The crash; see 8.3. |
+| 13 | the semantic graph is truncated at the configured node ceiling (structured field, not a string) | See 8.2. |
 
 Per-node evidence also carries its own limitation text on every Electron boundary observation:
 
 * "AST coverage is incomplete; omitted or dynamic facts must not be interpreted as absence."
 * "Only explicitly present webPreferences are reported; omitted properties are not interpreted as Electron
   defaults."
-
-**Limitation 7** ("Primitive string-byte budget exceeded") explains why REA's `ipc-channel` nodes often carry
-`channel_expression` (a short identifier such as `$t`, `Yt`, `AHe`) rather than the resolved literal: the
-string-interning budget was exhausted, so later string detail was dropped. That is also why this document
-resolved all 21 channel literals by direct `grep -oE '"sand:[a-z0-9-]+"'` over the beautified bundles
-instead of trusting the graph.
 
 ### 8.6 What remains unanswered
 
@@ -2649,64 +2639,31 @@ To be unambiguous about the epistemics:
 
 ## Appendix A - Citation index
 
-Shipped payload (`recon/grokbot-0.71.2/`), by section:
+**Shipped payload** (`recon/grokbot-0.71.2/`). `package.json` and the preamble: both. `main.cjs`: 2.1-2.8.
+`main-core.cjs`: 1.1, 2.7, 3.1(a), 3.2, 3.5, 3.6, 4.2, 4.5, 5.1-5.3. `main-app.cjs`: 1.1, 1.4, 3.1(b)-(g),
+3.2, 3.4, 5.1, 5.3. `proto.cjs` and `locales/`: 1.1. `chrome-import-worker.cjs`: 1.1, 8.4.
+`onepassword-connection-service.cjs`: 1.1, 7.2. `preload.cjs` (all five under `electron-preload/`): 1.1,
+3.1(g), 3.4, 4.1-4.7, 5.1, 5.3. `node-agent-coordinator/main.cjs`: 1.1, 1.4, 5.1.
+`local-exec-daemon/main.cjs` and `messages-worker.cjs`: 1.1, 1.5, 5.1, 8.4. `renderer/index.html`: 3.7, 4.5,
+6.1. `renderer/src/.../panel.html`: 3.8, 6.1. `renderer/assets/`: 6.1, 6.2, 8.4. `deps/*`: 7.1, 7.3 and the
+`runtime-deps-manifest.json` at 7.1.
 
-| Path | Cited in |
-|---|---|
-| `package.json` | 1.1, preamble |
-| `dist/electron-main/main.cjs` | 2.1-2.8 |
-| `dist/electron-main/main-core.cjs` | 1.1, 2.7, 3.1(a), 3.2, 3.5, 3.6, 4.2, 4.5, 5.1, 5.2, 5.3 |
-| `dist/electron-main/main-app.cjs` | 1.1, 1.4, 3.1(b)-(g), 3.2, 3.4, 5.1, 5.3 |
-| `dist/electron-main/proto.cjs` | 1.1 |
-| `dist/electron-main/chrome-import-worker.cjs` | 1.1, 8.4 |
-| `dist/electron-main/onepassword-connection-service.cjs` | 1.1, 7.2 |
-| `dist/electron-main/locales/` | 1.1 |
-| `dist/electron-preload/preload.cjs` | 1.1, 4.1-4.7, 5.1, 5.3 |
-| `dist/electron-preload/preload-desktop-mount-panel.cjs` | 1.1, 4.1, 4.3 |
-| `dist/electron-preload/preload-vnc.cjs` | 1.1, 3.4, 5.1 |
-| `dist/electron-preload/preload-webview.cjs` | 1.1, 3.4, 5.1 |
-| `dist/electron-preload/preload-avatar-source.cjs` | 1.1, 3.1(g), 5.1 |
-| `dist/node-agent-coordinator/main.cjs` | 1.1, 1.4, 5.1 |
-| `dist/local-exec-daemon/main.cjs` | 1.1, 1.5, 5.1, 8.4 |
-| `dist/local-exec-daemon/messages-worker.cjs` | 1.1, 1.5 |
-| `dist/renderer/index.html` | 3.7, 4.5, 6.1 |
-| `dist/renderer/src/electron-renderer/desktop-mount/panel/panel.html` | 3.8, 6.1 |
-| `dist/renderer/assets/` | 6.1, 6.2, 8.4 |
-| `dist/deps/runtime-deps-manifest.json` | 7.1 |
-| `dist/deps/*` | 7.1, 7.3 |
-
-Beautified bundles (`recon/beautified/`): `main-core.beauty.js`, `main-app.beauty.js`,
+**Beautified bundles** (`recon/beautified/`): `main-core.beauty.js`, `main-app.beauty.js`,
 `preload.beauty.js`, `preload-vnc.beauty.js`, `preload-webview.beauty.js`, `coordinator.beauty.js`,
 `exec-daemon.beauty.js`, `messages-worker.beauty.js` - cited by line throughout, with the caveat in
 "Citation conventions".
 
-Sealed evidence (`recon/rea/js-application.json`), by section:
+**Sealed evidence** (`recon/rea/js-application.json`). Metadata (`evidence_id`, `subject`, `confidence`,
+`authority`, `operation`, `parameters`) and `normalized_result.statistics`: 8.1.
+`normalized_result.summary`: 1.6, 3.2, 4.1, 5.3. `normalized_result.limitations[0..12]`: 3.2, 5.3, 8.3, 8.5.
+`semantic_graph.coverage`/`.limits`/`.nodes`/`.relations`: 8.2. Graph nodes by kind:
+`browser-window` 3.2; `context-bridge-api` 4.1; `ipc-channel` and `ipc-handler` 5.3; `electron-utility` and
+`worker` 1.6; `native-addon`, `native-export`, `package` 7.1; `javascript-asset` 8.4; `artifact` preamble
+and 8.4.
 
-| Projection path | Cited in |
-|---|---|
-| `evidence_id`, `subject`, `confidence`, `authority`, `operation`, `parameters` | 8.1 |
-| `normalized_result.summary` | 1.6, 3.2, 4.1, 5.3 |
-| `normalized_result.statistics` | 8.1 |
-| `normalized_result.limitations[0..12]` | 3.2, 5.3, 8.3, 8.5 |
-| `normalized_result.graph.nodes[kind=browser-window]` | 3.2 |
-| `normalized_result.graph.nodes[kind=context-bridge-api]` | 4.1 |
-| `normalized_result.graph.nodes[kind=ipc-channel]`, `[kind=ipc-handler]` | 5.3 |
-| `normalized_result.graph.nodes[kind=electron-utility]` | 1.6 |
-| `normalized_result.graph.nodes[kind=worker]` | 1.6 |
-| `normalized_result.graph.nodes[kind=native-addon]`, `[kind=native-export]`, `[kind=package]` | 7.1 |
-| `normalized_result.graph.nodes[kind=javascript-asset]` | 8.4 |
-| `normalized_result.graph.nodes[kind=artifact]` | preamble, 8.4 |
-| `normalized_result.semantic_graph.coverage`, `.limits`, `.nodes`, `.relations` | 8.2 |
-
-macOS bundle (`/Applications/Grok Bot.app/Contents/`):
-
-| Path | Cited in |
-|---|---|
-| `Info.plist` | 1.2, 1.3, 3.5, 3.9 |
-| `Helpers/Grok Bot Computer Use.app/Contents/Info.plist` | 1.3 |
-| `Frameworks/` | 1.2 |
-| `Resources/app.asar.unpacked/` | 1.3, 7.2 |
-| `CodeResources`, `_CodeSignature/` | 1.2 (integrity) |
+**macOS bundle** (`/Applications/Grok Bot.app/Contents/`). `Info.plist`: 1.2, 1.3, 3.5, 3.9.
+`Helpers/Grok Bot Computer Use.app/Contents/Info.plist`: 1.3. `Frameworks/` and `CodeResources` /
+`_CodeSignature/`: 1.2. `Resources/app.asar.unpacked/`: 1.3, 7.2.
 
 ---
 

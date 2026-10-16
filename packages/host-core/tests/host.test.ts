@@ -41,7 +41,7 @@ describe('authorization boundary', () => {
 
   it('refuses a person-class method from a device without human presence', async () => {
     const host = makeHost();
-    // A paired phone joins as `background` and is not unlocked.
+    // A phone that redeems a pairing code joins as `background`.
     const { pairingId, code } = host.beginPairing();
     const { device } = host.claimPairing({
       pairingId,
@@ -88,7 +88,7 @@ describe('authorization boundary', () => {
     const authed = host.authenticate(token);
     expect(authed?.id).toBe(device.id);
 
-    // Upgrade using local presence on the host, then the same session may act.
+    // The device is upgraded by local presence on the host, after which it may act.
     const session = host.createSession('local', device);
     session.channel satisfies 'local';
     await host.dispatch(session, 'devices.unlock', {

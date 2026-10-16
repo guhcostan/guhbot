@@ -44,14 +44,6 @@ export interface Session {
   readonly id: string;
   readonly channel: ChannelKind;
   device: Device | null;
-  /** True once the device has proven human presence on this session. */
-  unlocked: boolean;
-  /** Populated after a successful pair claim, before the caller persists it. */
-  readonly createDevice?: (input: {
-    name: string;
-    platform: DevicePlatform;
-    deviceClass: DeviceClass;
-  }) => { device: Device; token: string };
 }
 
 export class HostError extends Error {
@@ -253,14 +245,13 @@ export class Host {
    * over a socket, and it always has to authenticate.
    */
   createSession(channel: ChannelKind, device: Device | null = null): Session {
-    const session: Session = {
-      id: newId('dv'),
-      channel,
-      device,
-      // A local channel is the machine's own user; treat them as present.
-      unlocked: channel === 'local',
-    };
-    return session;
+    // Presence is a property of the *device*, established when it was created:
+    // a person-class device was minted either in-process on this host or by a
+    // human who possessed a person-class device and minted a code deliberately.
+    // A phone that redeems a code is always background class and cannot promote
+    // itself. There is therefore no separate per-session unlock flag to keep in
+    // sync, which is the point.
+    return { id: newId('dv'), channel, device };
   }
 
   /** Resolve a device token into a session. Returns null when the token is not valid. */
@@ -330,7 +321,7 @@ export class Host {
    *   1. method exists                      -> unknown names never reach a handler
    *   2. transport allowed (localOnly)      -> pairing cannot be minted remotely
    *   3. parameters match the schema        -> handlers may trust their input
-   *   4. authorization class                -> `person` needs an unlocked device
+   *   4. authorization class                -> `person` needs a person-class device
    *   5. handler runs
    *   6. output matches the schema          -> a buggy handler cannot leak a
    *                                            shape the clients cannot parse
@@ -382,8 +373,8 @@ export class Host {
     // paired devices can be operated at all.
     if (session.channel === 'local') return true;
 
-    // Remote work needs a device that a human has unlocked in this session.
-    return session.unlocked && session.device?.class === 'person';
+    // Remote work needs a person-class device.
+    return session.device?.class === 'person';
   }
 
   // -------------------------------------------------------------------------
@@ -647,6 +638,8 @@ const HANDLERS: HandlerTable = {
 
   'pairing.begin': async (host) => host.beginPairing(),
 
+  'pairing.beginForDevice': async (host) => host.beginPairing(),
+
   'pairing.claim': async (host, _session, input) =>
     host.claimPairing({
       pairingId: input.pairingId,
@@ -670,7 +663,6 @@ const HANDLERS: HandlerTable = {
     const updated = host.store.setDeviceClass(session.device.id, 'person');
     if (!updated) throw new HostError('not-found', 'device no longer exists');
     session.device = updated;
-    session.unlocked = true;
     return { device: updated };
   },
 

@@ -1,0 +1,20 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // Metro is the bundler here, not Node: it resolves extensionless and
+    // `.js`-suffixed specifiers itself, and it does not read `tsconfig.base`'s
+    // NodeNext rules. Everything else (strict, noUncheckedIndexedAccess,
+    // exactOptionalPropertyTypes, verbatimModuleSyntax) is inherited unchanged.
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "lib": ["ES2023", "DOM"],
+    "types": [],
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false,
+    "noEmit": true
+  },
+  "include": ["index.ts", "App.tsx", "expo-env.d.ts", "src/**/*.ts", "src/**/*.tsx", "tests/**/*.ts"]
+}
