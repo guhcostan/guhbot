@@ -9,10 +9,10 @@ your files, your shell and your browser — and every operation they can perform
 classified by whether it needs a human present.
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-67e8a2?style=flat-square)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-851%20passing-67e8a2?style=flat-square)](#testing)
+[![Tests](https://img.shields.io/badge/tests-852%20passing-67e8a2?style=flat-square)](#testing)
 [![Node](https://img.shields.io/badge/node-%E2%89%A522.5-339933?style=flat-square&logo=nodedotjs&logoColor=white)](#quick-start)
 
-[Website](https://d1490grrgfw1sj.cloudfront.net) · [Security](SECURITY.md) · [Architecture](docs/architecture.md) · [Reverse-engineering dossier](docs/re/00-index.md)
+[Website](website/index.html) · [Security](SECURITY.md) · [Architecture](docs/architecture.md) · [Reverse-engineering dossier](docs/re/00-index.md)
 
 </div>
 
@@ -72,7 +72,7 @@ Nothing reaches the network unless you configured what it may reach.
 | Agent memory | ✅ | Short facts an agent writes down and recalls on a later run — recalled into the prompt, so a run does not have to ask first. Per-agent, capped, and readable and deletable by the human |
 | Site credentials | ⚠️ | Per-origin approval, sealed at rest, released only from inside a tool execution. The vault is mounted and tested; the browser does not consume it yet |
 | Reachable from a phone | ✅ | `--companion` binds the network; the runtime itself never opens a socket |
-| Mobile app | ⚠️ | Complete and typechecked; the React Native bundle has not been run on a device |
+| Mobile app | ⚠️ | Bundles for iOS (922 modules, Hermes bytecode) and typechecks; it has not been installed or driven on a device |
 | Voice | ❌ | Not built |
 | Remote desktop | ❌ | Not built |
 | Hosted service | ⚠️ | Gateway, tenant isolation and waitlist are built and deployed; **not for sale** (no billing yet) |
@@ -203,7 +203,7 @@ stored unencrypted, and there is no cost budget per agent.
 pnpm test
 ```
 
-**851 tests** across 55 files, concentrating on properties that would be dangerous
+**852 tests** across 55 files, concentrating on properties that would be dangerous
 to get wrong rather than on coverage. Four more run against a live model when
 credentials are present.
 
@@ -250,10 +250,15 @@ reference uses them for a different mechanism, and
 
 ## The hosted service
 
-The site and the waitlist are deployed and live at
-**[d1490grrgfw1sj.cloudfront.net](https://d1490grrgfw1sj.cloudfront.net)**. A
-private S3 bucket behind CloudFront, one Lambda, one DynamoDB table, and no
-always-on server, because there is nothing yet that needs one.
+The site and waitlist are **built and were verified end to end** — a private S3
+bucket behind CloudFront, one Lambda, one DynamoDB table, and no always-on
+server, because there is nothing yet that needs one.
+
+**They are currently torn down.** The stack was destroyed deliberately rather
+than left idling between now and launch, so the URL in the sections above is not
+live. Bringing it back is one command from the infrastructure repository, and the
+runbook in `guhbot-infra/runbooks/site.md` records exactly what was verified
+before it came down. The CloudFront domain is allocated fresh on redeploy.
 
 **It is not for sale, and there is no billing.** Leaving an address adds it to the
 waitlist and nothing else. We are finding out whether anyone wants this before
