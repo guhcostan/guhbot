@@ -1,2 +1,7 @@
+# Expo generates these from app.json; there is no checked-in native project.
+# `expo prebuild` recreates them, and `ios/Pods` alone is over a gigabyte of
+# CocoaPods dependencies, which must never enter the repository.
 .expo/
+ios/
+android/
 web-build/
