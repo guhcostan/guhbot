@@ -8,7 +8,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Agent, Approval, Entry, HostStatus, Run } from '@guhbot/protocol';
-import { GuhbotClient } from '@guhbot/server';
+import { GuhbotClient } from '@guhbot/server/client';
 
 export interface DesktopBridge {
   hostUrl: string;
@@ -56,6 +56,75 @@ export interface HostApi {
   resolveApproval: (approvalId: string, granted: boolean) => Promise<void>;
 }
 
+/**
+ * Fold a `ready` frame into the state that describes this device.
+ *
+ * The `ready` frame is the only place a device ever learns its own authority
+ * class, and losing it is not cosmetic: the Keeper mascot exists to show the
+ * human what this device may do, so a dropped class makes the app describe
+ * itself as a passive viewer even when it holds the operator token. An
+ * unrecognised class leaves the previous value alone rather than guessing.
+ */
+export function applyReady(prev: HostState, payload: unknown): HostState {
+  const { deviceClass } = (payload ?? {}) as { deviceClass?: unknown };
+  if (deviceClass !== 'person' && deviceClass !== 'background') return prev;
+  return { ...prev, deviceClass };
+}
+
+/**
+ * Id under which a streamed delta is shown before its durable entry exists.
+ * Sequence numbers address one row of the thread, so the placeholder has to be
+ * recognisable as one — otherwise the durable entry lands beside it and the
+ * human reads the same sentence twice.
+ */
+function placeholderId(seq: number): string {
+  return `pending:${seq}`;
+}
+
+/**
+ * Fold a durable transcript entry into the thread.
+ *
+ * An entry can arrive either way round: deltas usually stream first, but a
+ * reconnect or a fast run can deliver the durable entry first. Either way the
+ * thread ends up with exactly one row per sequence, and the durable entry is the
+ * one that survives because it is the source of truth.
+ */
+export function applyAppended(prev: HostState, payload: unknown): HostState {
+  const { entry } = payload as { entry: Entry };
+  if (entry.agentId !== prev.activeAgentId) return prev;
+  if (prev.entries.some((e) => e.id === entry.id)) return prev;
+  const settled = prev.entries.filter((e) => e.id !== placeholderId(entry.seq));
+  return { ...prev, entries: [...settled, entry].sort((a, b) => a.seq - b.seq) };
+}
+
+/** Fold one streamed text delta into the thread, creating a placeholder if needed. */
+export function applyDelta(prev: HostState, payload: unknown): HostState {
+  const delta = payload as { agentId: string; seq: number; textDelta: string };
+  if (delta.agentId !== prev.activeAgentId) return prev;
+  const existing = prev.entries.find((e) => e.seq === delta.seq);
+  if (existing !== undefined) {
+    // The durable entry already contains this text, so replaying the delta onto
+    // it would double the run-on. Only a placeholder still needs the delta.
+    if (existing.id !== placeholderId(delta.seq)) return prev;
+    return {
+      ...prev,
+      entries: prev.entries.map((e) => (e.seq === delta.seq ? { ...e, content: e.content + delta.textDelta } : e)),
+    };
+  }
+  const provisional: Entry = {
+    id: placeholderId(delta.seq),
+    agentId: delta.agentId,
+    seq: delta.seq,
+    runId: null,
+    role: 'agent',
+    kind: 'message',
+    content: delta.textDelta,
+    toolName: null,
+    createdAt: new Date().toISOString(),
+  };
+  return { ...prev, entries: [...prev.entries, provisional].sort((a, b) => a.seq - b.seq) };
+}
+
 export function useHost(): HostApi {
   const [state, setState] = useState<HostState>(EMPTY);
   const clientRef = useRef<GuhbotClient | null>(null);
@@ -101,7 +170,8 @@ export function useHost(): HostApi {
     });
     clientRef.current = client;
 
-    client.on('ready', () => {
+    client.on('ready', (payload) => {
+      setState((prev) => applyReady(prev, payload));
       void refresh(client, activeAgentRef.current);
     });
     client.on('reconnected', () => {
@@ -109,38 +179,10 @@ export function useHost(): HostApi {
       void refresh(client, activeAgentRef.current);
     });
     client.on('transcript.appended', (payload) => {
-      const { entry } = payload as { entry: Entry };
-      setState((prev) => {
-        if (entry.agentId !== prev.activeAgentId || prev.entries.some((e) => e.id === entry.id)) return prev;
-        return { ...prev, entries: [...prev.entries, entry] };
-      });
+      setState((prev) => applyAppended(prev, payload));
     });
     client.on('transcript.delta', (payload) => {
-      const delta = payload as { agentId: string; seq: number; textDelta: string };
-      setState((prev) => {
-        if (delta.agentId !== prev.activeAgentId) return prev;
-        const existing = prev.entries.find((e) => e.seq === delta.seq);
-        if (existing) {
-          return {
-            ...prev,
-            entries: prev.entries.map((e) => (e.seq === delta.seq ? { ...e, content: e.content + delta.textDelta } : e)),
-          };
-        }
-        // A delta can arrive before its durable entry. Render it immediately at
-        // the sequence it will occupy, and let the appended entry replace it.
-        const provisional: Entry = {
-          id: `pending:${delta.seq}`,
-          agentId: delta.agentId,
-          seq: delta.seq,
-          runId: null,
-          role: 'agent',
-          kind: 'message',
-          content: delta.textDelta,
-          toolName: null,
-          createdAt: new Date().toISOString(),
-        };
-        return { ...prev, entries: [...prev.entries, provisional].sort((a, b) => a.seq - b.seq) };
-      });
+      setState((prev) => applyDelta(prev, payload));
     });
     client.on('run.updated', (payload) => {
       const { run } = payload as { run: Run };

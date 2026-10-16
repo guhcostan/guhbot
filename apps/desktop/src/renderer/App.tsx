@@ -1,7 +1,17 @@
 import type { JSX } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { Agent, Approval, Entry, Run } from '@guhbot/protocol';
+import type { Agent, Approval, Entry, Run, RunStatus } from '@guhbot/protocol';
 import { useHost } from './api.js';
+import logo from './assets/mascot/logo.svg';
+import keeperPerson from './assets/mascot/keeper-person.svg';
+import keeperBackground from './assets/mascot/keeper-background.svg';
+import keeperAsleep from './assets/mascot/keeper-asleep.svg';
+import avatar1 from './assets/mascot/avatar-1.svg';
+import avatar2 from './assets/mascot/avatar-2.svg';
+import avatar3 from './assets/mascot/avatar-3.svg';
+import avatar4 from './assets/mascot/avatar-4.svg';
+import avatar5 from './assets/mascot/avatar-5.svg';
+import avatar6 from './assets/mascot/avatar-6.svg';
 import './App.css';
 
 /**
@@ -45,8 +55,7 @@ export function App(): JSX.Element {
     <div className="shell">
       <aside className="sidebar">
         <div className="brand">
-          <span className="brand-mark">G</span>
-          <span className="brand-name">guhbot</span>
+          <img className="brand-logo" src={logo} alt="guhbot" />
           <span className="brand-version">{state.host?.version ?? '…'}</span>
         </div>
 
@@ -54,6 +63,16 @@ export function App(): JSX.Element {
           <span className={`conn-dot ${state.status === 'ready' ? 'on' : 'off'}`} />
           {state.status === 'ready' ? 'connected' : state.status}
           {state.deviceClass !== null ? <span className="conn-pill">{state.deviceClass}</span> : null}
+        </div>
+
+        {/*
+          Keeper carries the authorization model, so it belongs here rather than
+          only on the marketing site. A device with a person token sees both eyes
+          open; a paired phone sees one, because it cannot act outward.
+        */}
+        <div className="keeper-row">
+          <img className="keeper" src={keeperState(state.deviceClass, activeRun)} alt="" />
+          <span className="keeper-note">{keeperNote(state.deviceClass, activeRun)}</span>
         </div>
 
         <label className="search">
@@ -75,9 +94,7 @@ export function App(): JSX.Element {
                 onClick={() => selectAgent(agent.id)}
                 className={`agent-row ${agent.id === state.activeAgentId ? 'active' : ''}`}
               >
-                <span className="avatar" style={{ background: avatarGradient(agent.name) }}>
-                  {initials(agent.name)}
-                </span>
+                <img className="avatar" src={avatarFor(agent.name)} alt="" />
                 <span className="agent-meta">
                   <span className="agent-name">{agent.name}</span>
                   <span className="agent-sub">{agent.model ?? 'host default model'}</span>
@@ -118,9 +135,7 @@ export function App(): JSX.Element {
         ) : (
           <>
             <header className="chat-header">
-              <span className="avatar" style={{ background: avatarGradient(activeAgent.name) }}>
-                {initials(activeAgent.name)}
-              </span>
+              <img className="avatar" src={avatarFor(activeAgent.name)} alt="" />
               <h2>{activeAgent.name}</h2>
               {activeAgent.model !== null ? <span className="model">{activeAgent.model}</span> : null}
               {activeRun !== null && (activeRun.status === 'running' || activeRun.status === 'waiting-approval' || activeRun.status === 'queued') ? (
@@ -287,6 +302,49 @@ function latestRun(runs: Record<string, Run>, agentId: string | null): Run | nul
     if (best === null || run.startedAt > best.startedAt) best = run;
   }
   return best;
+}
+
+/**
+ * Pick an avatar from the agent's name.
+ *
+ * Deterministic on purpose: the same agent must keep the same face across
+ * restarts, or the sidebar becomes unreadable. Six hues, all the same character.
+ */
+export function avatarFor(name: string): string {
+  const pool = [avatar1, avatar2, avatar3, avatar4, avatar5, avatar6];
+  let hash = 0;
+  for (let i = 0; i < name.length; i += 1) {
+    hash = (hash * 31 + name.charCodeAt(i)) % 100_000;
+  }
+  return pool[hash % pool.length] ?? avatar1;
+}
+
+/**
+ * Statuses that mean a run is still in flight. A run that has reached a terminal
+ * status is over, even though its row stays in the store.
+ */
+const LIVE_RUN_STATUSES: readonly RunStatus[] = ['queued', 'running', 'waiting-approval'];
+
+function runInFlight(run: Run | null): boolean {
+  return run !== null && LIVE_RUN_STATUSES.includes(run.status);
+}
+
+/**
+ * Which Keeper to draw, and it is not decoration: the state is the authorization
+ * model, and it has to agree with the three states the landing page advertises.
+ * Both eyes open while a human-backed device has a run in flight, one eye for a
+ * device that may only watch, and closed when nothing is running at all.
+ */
+export function keeperState(deviceClass: 'person' | 'background' | null, run: Run | null): string {
+  if (!runInFlight(run)) return keeperAsleep;
+  return deviceClass === 'person' ? keeperPerson : keeperBackground;
+}
+
+export function keeperNote(deviceClass: 'person' | 'background' | null, run: Run | null): string {
+  if (deviceClass !== 'person') return 'A paired device. It can watch, and cannot act outward.';
+  if (run !== null && run.status === 'waiting-approval') return 'Waiting on your approval.';
+  if (runInFlight(run)) return 'Working.';
+  return 'You are here, so this device can act. Nothing is running.';
 }
 
 function initials(name: string): string {

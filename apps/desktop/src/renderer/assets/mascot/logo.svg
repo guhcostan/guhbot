@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 236 64" role="img" aria-label="guhbot">
+  <g transform="translate(4 4) scale(0.4375)">
+  <defs><filter id="g" x="-60%" y="-60%" width="220%" height="220%">
+        <feGaussianBlur stdDeviation="6" result="b" />
+        <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+      </filter></defs>
+  
+  <!-- antenna -->
+  <path d="M64 30 V16" stroke="#2b3540" stroke-width="5" stroke-linecap="round" />
+  <circle cx="64" cy="22" r="9" fill="#67e8a2" opacity="0.18" filter="url(#g)" />
+  <circle cx="64" cy="13" r="7" fill="#67e8a2" />
+  <!-- body -->
+  <rect x="18" y="30" width="92" height="82" rx="24" fill="#141a1f" stroke="#2b3540" stroke-width="3" />
+  <!-- the terminal notch: this is what makes it read as a machine, not a face -->
+  <path d="M34 44 H94" stroke="#2b3540" stroke-width="3" stroke-linecap="round" opacity="0.55" />
+  
+    <g filter="url(#g)">
+      <rect x="40" y="56" width="15" height="19" rx="9.5" fill="#67e8a2" />
+      <rect x="73" y="56" width="15" height="19" rx="9.5" fill="#67e8a2" />
+    </g>
+  
+  <!-- two short strokes suggesting a screen edge, echoing the notch -->
+  <path d="M40 96 H60" stroke="#2b3540" stroke-width="3.2" stroke-linecap="round" opacity="0.4" />
+  <path d="M68 96 H88" stroke="#2b3540" stroke-width="3.2" stroke-linecap="round" opacity="0.22" />
+</g>
+  <text x="70" y="42" fill="#e8ebee" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="28" font-weight="650" letter-spacing="-0.7">guhbot</text>
+</svg>

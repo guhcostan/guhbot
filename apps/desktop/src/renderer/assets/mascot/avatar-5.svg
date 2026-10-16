@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="guhbot">
+  <defs></defs>
+  <rect width="128" height="128" rx="28" fill="#08090b" />
+  <!-- antenna -->
+  <path d="M64 30 V16" stroke="#655331" stroke-width="3.75" stroke-linecap="round" />
+  
+  <circle cx="64" cy="13" r="5.25" fill="#f0c674" />
+  <!-- body -->
+  <rect x="18" y="30" width="92" height="82" rx="18" fill="#262013" stroke="#655331" stroke-width="2.25" />
+  <!-- the terminal notch: this is what makes it read as a machine, not a face -->
+  <path d="M34 44 H94" stroke="#655331" stroke-width="2.25" stroke-linecap="round" opacity="0.55" />
+  
+    <g filter="none">
+      <rect x="40" y="56" width="15" height="19" rx="9.5" fill="#f0c674" />
+      <rect x="73" y="56" width="15" height="19" rx="9.5" fill="#f0c674" />
+    </g>
+  
+  <!-- two short strokes suggesting a screen edge, echoing the notch -->
+  <path d="M40 96 H60" stroke="#655331" stroke-width="3.2" stroke-linecap="round" opacity="0.4" />
+  <path d="M68 96 H88" stroke="#655331" stroke-width="3.2" stroke-linecap="round" opacity="0.22" />
+</svg>

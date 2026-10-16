@@ -42,6 +42,16 @@ const here = dirname(fileURLToPath(import.meta.url));
 mkdirSync(here, { recursive: true });
 
 /**
+ * The generator writes the same files to two places, because both consume them
+ * and neither can reach the other's directory: the site serves them as static
+ * assets, and the desktop renderer imports them through its bundler. One script,
+ * one source of truth, two outputs, so an edited mascot cannot appear on the site
+ * and not in the app.
+ */
+const OUTPUT_DIRS = [here, join(here, '..', '..', 'apps', 'desktop', 'src', 'renderer', 'assets', 'mascot')];
+for (const dir of OUTPUT_DIRS) mkdirSync(dir, { recursive: true });
+
+/**
  * Palette. Deliberately narrow: one accent doing all the work, on a near-black
  * ground. Both closest products are light-themed, so the dark ground is part of
  * how this is recognised rather than a preference.
@@ -187,7 +197,7 @@ function inner(svg) {
 const written = [];
 
 function emit(name, contents) {
-  writeFileSync(join(here, name), contents);
+  for (const dir of OUTPUT_DIRS) writeFileSync(join(dir, name), contents);
   written.push(name);
 }
 
@@ -233,4 +243,7 @@ AVATAR_HUES.forEach((hue, index) => {
 // Sleeping and working avatars, for an agent that is parked or busy.
 emit('avatar-asleep.svg', keeper({ size: 96, state: EYES.asleep, hue: '#7a8896', glow: false, background: true }));
 
-process.stdout.write(`wrote ${written.length} files to ${here}\n${written.map((f) => `  ${f}`).join('\n')}\n`);
+for (const dir of OUTPUT_DIRS) {
+  process.stdout.write(`wrote ${written.length} files to ${dir}\n`);
+}
+process.stdout.write(`${written.map((f) => `  ${f}`).join('\n')}\n`);
