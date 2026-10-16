@@ -71,7 +71,9 @@ export function connectionView(input: ConnectionInput): ConnectionView {
         label: 'Signing in',
         hint: 'The host is checking this device token.',
         ready: false,
-        busy: !input.hasBeenReady,
+        // The device is waiting on the host right now, including the very first
+        // sign-in, so this is busy whether or not the host was reached before.
+        busy: true,
         tone: 'neutral',
       };
     case 'idle':

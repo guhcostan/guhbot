@@ -336,7 +336,9 @@ html, body {
   color: var(--amber);
 }
 .approval-summary { font-size: 12.5px; color: var(--text); }
+.approval-meta { font-size: 11px; color: var(--faint); }
 .approval-actions { display: flex; gap: 7px; margin-top: 2px; }
+.approval-actions button:disabled { opacity: 0.55; cursor: default; }
 
 .btn-approve {
   background: var(--mint);
@@ -509,8 +511,6 @@ html, body {
   overflow-y: auto;
 }
 .tool-block.result { border-style: dashed; }
-.tool-block.error { border-color: #5a2a24; }
-.tool-block.error .tool-head { color: var(--red); }
 
 /* — Empty state ————————————————————————— */
 

@@ -25,7 +25,7 @@ function setStatus(state, message) {
 }
 
 if (form instanceof HTMLFormElement) {
-  const endpoint = form.dataset.endpoint ?? '/api/waitlist';
+  const endpoint = form.dataset.endpoint ?? './api/waitlist';
   const submit = form.querySelector('button[type="submit"]');
   const input = form.querySelector('input[type="email"]');
 

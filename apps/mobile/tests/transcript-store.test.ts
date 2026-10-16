@@ -97,6 +97,26 @@ describe('transcript store', () => {
     expect(state.loadingOlder).toBe(false);
   });
 
+  it('advances the paging cursor to the newest entry when the final page closes the history', async () => {
+    const host = fakeHost(history(500));
+    const store = createTranscriptStore({ request: host.request });
+
+    await store.open(AGENT);
+    expect(store.get().windowStart).toBe(440);
+    expect(store.get().canLoadOlder).toBe(true);
+
+    await store.loadOlder();
+    await store.loadOlder();
+    await store.loadOlder();
+
+    const state = store.get();
+    // The last page was short, so the host sent `nextCursor: null` and the
+    // cursor has to land on the newest entry, not on the start of the window.
+    expect(state.coveredThrough).toBe(499);
+    expect(state.canLoadOlder).toBe(false);
+    expect(state.loadingOlder).toBe(false);
+  });
+
   it('merges a live message in and finalizes it when the entry lands', async () => {
     const host = fakeHost(history(3));
     const store = createTranscriptStore({ request: host.request });
@@ -132,6 +152,39 @@ describe('transcript store', () => {
 
     expect(host.calls.at(-1)).toEqual({ method: 'transcript.page', params: { agentId: AGENT, limit: 200, afterSeq: 9 } });
     expect(seqs(store.get().items)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  });
+
+  it('keeps paging during resync until the host closes the cursor', async () => {
+    const entries: Entry[] = history(10);
+    const calls: Array<{ method: MethodName; params: unknown }> = [];
+    const request = (async (method: MethodName, params: unknown): Promise<unknown> => {
+      calls.push({ method, params });
+      if (method === 'transcript.tail') {
+        const input = params as { limit: number };
+        return { entries: entries.slice(-input.limit) };
+      }
+      if (method === 'transcript.page') {
+        const input = params as { afterSeq?: number; limit: number };
+        const after = input.afterSeq ?? -1;
+        const page = entries.filter((item) => item.seq > after).slice(0, input.limit);
+        const last = page.at(-1);
+        return { entries: page, nextCursor: page.length === input.limit && last !== undefined ? String(last.seq) : null };
+      }
+      return Promise.reject({ code: 'not-found', message: `${method} is not in this fake host`, retryable: false });
+    }) as unknown as TranscriptStoreDeps['request'];
+
+    const store = createTranscriptStore({ request });
+    await store.open(AGENT);
+    // The phone was offline while the host kept working: hundreds of entries
+    // landed, far more than a single page can carry.
+    for (let seq = 10; seq < 500; seq += 1) entries.push({ ...entry(seq), content: `line ${seq}` });
+
+    await store.resync();
+
+    expect(calls.filter((call) => call.method === 'transcript.page')).toHaveLength(3);
+    expect(store.get().status).toBe('ready');
+    // The whole gap came back, in order, exactly once each.
+    expect(seqs(store.get().items)).toEqual(Array.from({ length: 500 }, (_, seq) => seq));
   });
 
   it('reports a failed tail and can be reopened', async () => {

@@ -5,6 +5,7 @@
  */
 export const colors = {
   background: '#08090b',
+  sidebar: '#0b0e12',
   surface: '#10151b',
   surfaceAlt: '#151c24',
   surfaceRaised: '#1a222c',

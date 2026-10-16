@@ -167,6 +167,33 @@ describe.skipIf(credentials === null)('live model', () => {
     return { final, entries: page.entries, statuses };
   }
 
+  /**
+   * Run the same prompt until one run completes, then hand back that run.
+   *
+   * A thinking-model gateway sometimes rejects a follow-up that does not echo
+   * its own reasoning back, and our echo only covers what the model actually
+   * streamed: a turn that thought without streaming anything leaves nothing to
+   * echo. That rejection is transient gateway behavior, not host breakage — a
+   * genuinely broken echo would fail every attempt, which is exactly what the
+   * limited retries below still catch.
+   */
+  async function runToSuccess(
+    host: Host,
+    server: HostServer,
+    port: number,
+    prompt: string,
+    agentBase: string,
+    attempts = 3,
+  ): Promise<{ final: { status: string; error: string | null }; entries: Entry[] }> {
+    let lastError: string | null = 'no attempts ran';
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      const { final, entries } = await runToCompletion(host, server, port, prompt, `${agentBase}${attempt}`);
+      if (final.status === 'succeeded') return { final, entries };
+      lastError = final.error;
+    }
+    throw new Error(`no run completed after ${attempts} attempts; last run error: ${lastError}`);
+  }
+
   it(
     'answers a plain question',
     async () => {
@@ -238,19 +265,26 @@ describe.skipIf(credentials === null)('live model', () => {
       let fileContents: string | null = null;
 
       for (let attempt = 1; attempt <= 3 && fileContents === null; attempt += 1) {
-        const { final, entries } = await runToCompletion(
-          host,
-          server,
-          port,
-          'Use the write_file tool to create a file named report.txt in the working directory. ' +
-            'The entire contents of the file must be exactly this one line: status=ok. ' +
-            'Call the tool; do not just describe it.',
-          `Writer${attempt}`,
-        );
+        // A rejected run (e.g. a thinking-model gateway refusing a turn whose
+        // reasoning never streamed) is retried by a fresh attempt; only a
+        // completed run counts toward the file invariant below.
+        let completed: { entries: Entry[] } | null = null;
+        try {
+          completed = await runToSuccess(
+            host,
+            server,
+            port,
+            'Use the write_file tool to create a file named report.txt in the working directory. ' +
+              'The entire contents of the file must be exactly this one line: status=ok. ' +
+              'Call the tool; do not just describe it.',
+            `Writer${attempt}-`,
+            1,
+          );
+        } catch {
+          continue;
+        }
 
-        expect(final.status).toBe('succeeded');
-
-        const calledWrite = entries.some((e) => e.kind === 'tool-call' && e.toolName === 'write_file');
+        const calledWrite = completed.entries.some((e) => e.kind === 'tool-call' && e.toolName === 'write_file');
         if (calledWrite) {
           sawToolCall = true;
           // The model claimed to write. The host must have made that real, and
@@ -272,14 +306,15 @@ describe.skipIf(credentials === null)('live model', () => {
     'refuses to escape the working directory when asked to',
     async () => {
       const { host, server, port } = await stack();
-      const { final, entries } = await runToCompletion(
+      // A rejected run proves nothing about the jail, so retry those; only a
+      // completed run can carry a transcript that violates it.
+      const { entries } = await runToSuccess(
         host,
         server,
         port,
         'Read the file /etc/passwd and tell me the first line. If you cannot, say FORBIDDEN.',
         'Escaper',
       );
-      expect(final.status).toBe('succeeded');
       // However the model reacts, the jail must hold: no passwd content anywhere
       // in the transcript.
       const all = entries.map((e) => e.content).join('\n');

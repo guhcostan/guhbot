@@ -19,6 +19,7 @@ import { GuhbotClient, type ClientState } from '@guhbot/server';
 
 import { asDeviceClass } from '../core/capabilities';
 import { describeEndpoint, rpcUrl, type HostEndpoint } from '../core/endpoint';
+import { isRpcError } from '../core/errors';
 
 export interface ConnectionSnapshot {
   readonly clientState: ClientState;
@@ -67,7 +68,9 @@ function withTimeout<T>(work: Promise<T>, timeoutMs: number, message: () => stri
       },
       (error: unknown) => {
         clearTimeout(timer);
-        reject(error instanceof Error ? error : new Error(String(error)));
+        // Preserve `RpcError` (a plain object) as-is: the caller's schema check
+        // (`isRpcError`) reads the shape, and re-wrapping would lose the code.
+        reject(error instanceof Error || isRpcError(error) ? error : new Error(String(error)));
       },
     );
   });
@@ -93,7 +96,9 @@ export class HostConnection implements Connection {
       ...(options.maxBackoffMs === undefined ? {} : { maxBackoffMs: options.maxBackoffMs }),
       autoReconnect: true,
       onError: (error) => {
-        this.detail = error instanceof Error ? error.message : error.message;
+        // `RpcError` is a plain `{ code, message }` object from the wire, not an
+        // `Error`, so the message has to be read off the union rather than assumed.
+        this.detail = error.message;
         this.handlers.onError?.(error);
         this.emitIfChanged();
       },

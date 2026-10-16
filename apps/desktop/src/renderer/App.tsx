@@ -36,13 +36,16 @@ export function App(): JSX.Element {
   const activeAgent = state.agents.find((a) => a.id === state.activeAgentId) ?? null;
   const activeRun = useMemo(() => latestRun(state.runs, state.activeAgentId), [state.runs, state.activeAgentId]);
 
+  // Hidden agents stay reachable by id but never appear in a list a human
+  // browses: the sidebar, the counts and the welcome picks all agree on that.
+  const visibleAgents = useMemo(() => state.agents.filter((a) => !a.hidden), [state.agents]);
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (q.length === 0) return state.agents;
-    return state.agents.filter(
+    if (q.length === 0) return visibleAgents;
+    return visibleAgents.filter(
       (a) => a.name.toLowerCase().includes(q) || (a.model ?? '').toLowerCase().includes(q),
     );
-  }, [state.agents, query]);
+  }, [visibleAgents, query]);
 
   const submit = (): void => {
     const text = draft.trim();
@@ -81,11 +84,11 @@ export function App(): JSX.Element {
         </label>
 
         <div className="side-label">
-          Agents <em>{state.agents.length}</em>
+          Agents <em>{visibleAgents.length}</em>
         </div>
         <nav className="agent-list" aria-label="Agents">
           {filtered.length === 0 ? (
-            <div className="muted">{state.agents.length === 0 ? 'No agents yet. Create one on the host.' : 'No match.'}</div>
+            <div className="muted">{visibleAgents.length === 0 ? 'No agents yet. Create one on the host.' : 'No match.'}</div>
           ) : (
             filtered.map((agent) => (
               <button
@@ -125,13 +128,18 @@ export function App(): JSX.Element {
         {state.approvals.length > 0 ? (
           <section className="approvals" aria-label="Pending approvals">
             {state.approvals.map((approval) => (
-              <ApprovalCard key={approval.id} approval={approval} onResolve={(g) => void resolveApproval(approval.id, g)} />
+              <ApprovalCard
+                key={approval.id}
+                approval={approval}
+                busy={state.resolvingApprovalId === approval.id}
+                onResolve={(g) => void resolveApproval(approval.id, g)}
+              />
             ))}
           </section>
         ) : null}
 
         {activeAgent === null ? (
-          <WelcomeState onPick={(id) => selectAgent(id)} agents={state.agents} />
+          <WelcomeState onPick={(id) => selectAgent(id)} agents={visibleAgents} />
         ) : (
           <>
             <header className="chat-header">
@@ -188,16 +196,28 @@ export function App(): JSX.Element {
 
 /* — Approvals ——————————————————————————— */
 
-function ApprovalCard({ approval, onResolve }: { approval: Approval; onResolve: (granted: boolean) => void }): JSX.Element {
+function ApprovalCard({
+  approval,
+  busy,
+  onResolve,
+}: {
+  approval: Approval;
+  busy: boolean;
+  onResolve: (granted: boolean) => void;
+}): JSX.Element {
   return (
     <div className="approval-card">
       <div className="approval-kind">⏸ {prettyKind(approval.kind)} · needs you</div>
       <div className="approval-summary">{approval.summary}</div>
+      <div className="approval-meta">
+        asked {ageLabel(approval.createdAt, Date.now())}
+        {approval.expiresAt === null ? ' · no expiry' : ` · expires ${remainingLabel(approval.expiresAt, Date.now())}`}
+      </div>
       <div className="approval-actions">
-        <button type="button" className="btn-approve" onClick={() => onResolve(true)}>
-          Approve
+        <button type="button" className="btn-approve" onClick={() => onResolve(true)} disabled={busy}>
+          {busy ? 'Answering…' : 'Approve'}
         </button>
-        <button type="button" className="btn-deny" onClick={() => onResolve(false)}>
+        <button type="button" className="btn-deny" onClick={() => onResolve(false)} disabled={busy}>
           Deny
         </button>
       </div>
@@ -347,21 +367,36 @@ export function keeperNote(deviceClass: 'person' | 'background' | null, run: Run
   return 'You are here, so this device can act. Nothing is running.';
 }
 
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return (parts[0]?.slice(0, 2) ?? '·').toUpperCase();
-  return `${parts[0]?.[0] ?? ''}${parts[1]?.[0] ?? ''}`.toUpperCase();
-}
-
-/** Stable pastel gradient per name, so avatars are distinguishable without images. */
-function avatarGradient(name: string): string {
-  let h = 0;
-  for (const c of name) h = (h * 31 + c.charCodeAt(0)) % 360;
-  return `linear-gradient(150deg, hsl(${h} 60% 72%), hsl(${(h + 40) % 360} 55% 52%))`;
-}
-
 function prettyKind(kind: Approval['kind']): string {
   return kind.replace(/-/g, ' ');
+}
+
+/* — Pure presentation helpers (no network, no deps, testable) ——————— */
+
+export function ageLabel(iso: string, now: number): string {
+  const at = new Date(iso).getTime();
+  if (Number.isNaN(at)) return 'just now';
+  const seconds = Math.max(0, Math.round((now - at) / 1000));
+  if (seconds < 60) return 'just now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
+export function remainingLabel(expiresAt: string, now: number): string {
+  const at = new Date(expiresAt).getTime();
+  if (Number.isNaN(at)) return 'soon';
+  const ms = at - now;
+  if (ms <= 0) return 'expired';
+  const seconds = Math.floor(ms / 1000);
+  if (seconds < 60) return 'under a minute';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `in ${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `in ${hours}h`;
+  return `in ${Math.floor(hours / 24)}d`;
 }
 
 function truncate(text: string, max: number): string {

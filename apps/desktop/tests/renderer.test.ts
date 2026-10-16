@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Entry, Run, RunStatus } from '@guhbot/protocol';
-import { applyAppended, applyDelta, applyReady, type HostState } from '../src/renderer/api.js';
-import { keeperNote, keeperState } from '../src/renderer/App.js';
+import { applyAppended, applyDelta, applyReady, errorMessage, type HostState } from '../src/renderer/api.js';
+import { ageLabel, keeperNote, keeperState, remainingLabel } from '../src/renderer/App.js';
 import keeperAsleep from '../src/renderer/assets/mascot/keeper-asleep.svg';
 import keeperBackground from '../src/renderer/assets/mascot/keeper-background.svg';
 import keeperPerson from '../src/renderer/assets/mascot/keeper-person.svg';
@@ -24,6 +24,7 @@ const IDLE: HostState = {
   runs: {},
   approvals: [],
   error: null,
+  resolvingApprovalId: null,
 };
 
 function run(status: RunStatus): Run {
@@ -166,5 +167,48 @@ describe('keeper mascot', () => {
     expect(keeperNote('person', run('running'))).toBe('Working.');
     expect(keeperNote('person', run('waiting-approval'))).toMatch(/approval/i);
     expect(keeperNote('background', run('running'))).toMatch(/cannot act outward/i);
+  });
+});
+
+describe('errorMessage', () => {
+  it('reads the message off an Error instance', () => {
+    expect(errorMessage(new Error('boom'))).toBe('boom');
+  });
+
+  it('reads the message off a plain RpcError object from the wire', () => {
+    expect(errorMessage({ code: 'internal', message: 'host is locked', retryable: true })).toBe('host is locked');
+  });
+
+  it('does not guess for values that carry no message', () => {
+    expect(errorMessage('plain string')).toBe('plain string');
+    expect(errorMessage(null)).toBe('null');
+  });
+});
+
+describe('approval ageing', () => {
+  it('labels how long ago an approval was asked', () => {
+    const now = new Date('2026-10-16T12:00:00.000Z').getTime();
+    expect(ageLabel('2026-10-16T12:00:00.000Z', now)).toBe('just now');
+    expect(ageLabel('2026-10-16T11:59:30.000Z', now)).toBe('just now');
+    expect(ageLabel('2026-10-16T11:59:00.000Z', now)).toBe('1m ago');
+    expect(ageLabel('2026-10-16T11:00:00.000Z', now)).toBe('1h ago');
+    expect(ageLabel('2026-10-15T12:00:00.000Z', now)).toBe('1d ago');
+  });
+
+  it('gives up on unparsable timestamps', () => {
+    expect(ageLabel('not a date', 0)).toBe('just now');
+  });
+
+  it('labels the time left before an approval expires', () => {
+    const now = new Date('2026-10-16T12:00:00.000Z').getTime();
+    expect(remainingLabel('2026-10-16T12:00:30.000Z', now)).toBe('under a minute');
+    expect(remainingLabel('2026-10-16T12:30:00.000Z', now)).toBe('in 30m');
+    expect(remainingLabel('2026-10-16T14:00:00.000Z', now)).toBe('in 2h');
+    expect(remainingLabel('2026-10-17T12:00:00.000Z', now)).toBe('in 1d');
+  });
+
+  it('flags an expiry that already passed', () => {
+    const now = new Date('2026-10-16T12:00:00.000Z').getTime();
+    expect(remainingLabel('2026-10-16T11:00:00.000Z', now)).toBe('expired');
   });
 });

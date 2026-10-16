@@ -26,6 +26,17 @@ describe('connectionView', () => {
     expect(view.ready).toBe(false);
   });
 
+  it('spins while the host is authenticating this device, first sign-in or not', () => {
+    const first = connectionView({ clientState: 'authenticating', paired: true, hasBeenReady: false, detail: null });
+    expect(first.state).toBe('connecting');
+    expect(first.busy).toBe(true);
+    expect(first.ready).toBe(false);
+
+    const again = connectionView({ clientState: 'authenticating', paired: true, hasBeenReady: true, detail: null });
+    expect(again.state).toBe('connecting');
+    expect(again.busy).toBe(true);
+  });
+
   it('reports a host that went away as unreachable, never as busy', () => {
     const view = connectionView({
       clientState: 'closed',

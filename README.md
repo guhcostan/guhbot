@@ -275,6 +275,8 @@ capability seam, and the security posture every new capability is expected to
 honour. New tools that touch the filesystem, the network or a credential need a
 refusal test.
 
+Notable changes are recorded in [`CHANGELOG.md`](CHANGELOG.md).
+
 ## Licence
 
 [Apache-2.0](LICENSE).

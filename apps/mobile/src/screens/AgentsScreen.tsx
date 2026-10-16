@@ -24,14 +24,13 @@ export function AgentsScreen(): ReactElement {
   const [draftName, setDraftName] = useState('');
 
   const canCreate = capabilityFor(state.deviceClass, 'agents.create');
-  const neverLoaded = state.loadedAt === null;
 
   const header = (
     <View>
       <View style={styles.hero}>
         <Text style={styles.heroTitle}>Your agents</Text>
         <Text style={styles.heroSub}>
-          {state.agents.length === 0 ? 'Nothing running yet.' : `${state.agents.length} ${state.agents.length === 1 ? 'agent' : 'agents'} on this host.`}
+          {state.agents.length === 0 ? 'No agents yet.' : `${state.agents.length} ${state.agents.length === 1 ? 'agent' : 'agents'} on this host.`}
         </Text>
       </View>
       <ConnectionBanner view={state.connection} onRetry={() => void app.reconnect()} />
@@ -102,7 +101,7 @@ export function AgentsScreen(): ReactElement {
         keyExtractor={(agent) => agent.id}
         ListHeaderComponent={header}
         ListEmptyComponent={
-          neverLoaded && state.connection.busy ? (
+          state.refreshing ? (
             <View style={styles.loadingRow}>
               <ActivityIndicator color={colors.muted} />
               <Text style={styles.muted}>Loading agents from the host…</Text>

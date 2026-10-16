@@ -1,8 +1,8 @@
-import type { Agent, Approval, MethodInput, MethodName, MethodOutput, RpcError } from '@guhbot/protocol';
-import { describe, expect, it } from 'vitest';
+import type { Agent, Approval, EventName, MethodInput, MethodName, MethodOutput, RpcError } from '@guhbot/protocol';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { Connection, ConnectionSnapshot, HostConnectionOptions } from '../src/host/connection';
-import { createSessionStore, HOST_KEY, TOKEN_KEY, type StringStore } from '../src/host/storage';
+import { createSessionStore, HOST_KEY, TOKEN_KEY, type SessionStore, type StringStore } from '../src/host/storage';
 import { createAppStore } from '../src/state/app-store';
 
 const TOKEN = 't'.repeat(43);
@@ -131,7 +131,12 @@ function hostHandlers(overrides: Readonly<Record<string, Handler>> = {}): Readon
   };
 }
 
-function setup(options: { readonly handlers?: Readonly<Record<string, Handler>>; readonly deviceClass?: 'person' | 'background'; readonly stored?: boolean } = {}) {
+function setup(options: {
+  readonly handlers?: Readonly<Record<string, Handler>>;
+  readonly deviceClass?: 'person' | 'background';
+  readonly stored?: boolean;
+  readonly onTranscriptEvent?: (event: EventName, payload: unknown) => void;
+} = {}) {
   const created: FakeConnection[] = [];
   let reconnected = 0;
   const values = memoryStore(options.stored === true ? { [HOST_KEY]: JSON.stringify({ host: '192.168.1.20', port: 8787, deviceId: 'dv_1', deviceName: 'Old phone' }) } : {});
@@ -147,7 +152,7 @@ function setup(options: { readonly handlers?: Readonly<Record<string, Handler>>;
     },
     platform: 'ios',
     deviceName: () => 'Test iPhone',
-    onTranscriptEvent: () => undefined,
+    onTranscriptEvent: options.onTranscriptEvent ?? (() => undefined),
     onHostReconnected: () => {
       reconnected += 1;
     },
@@ -314,5 +319,126 @@ describe('app store: refusals the device cannot perform', () => {
     // Host status and approvals still landed: one bad call does not blank the app.
     expect(state.hostStatus?.hostId).toBe('host_1');
     expect(state.approvals).toHaveLength(1);
+  });
+});
+
+describe('app store: host event fan-in', () => {
+  it('forwards streamed transcript deltas to the transcript handler', async () => {
+    const onTranscriptEvent = vi.fn();
+    const { app, created } = setup({ onTranscriptEvent });
+    await app.bootstrap();
+    await app.pair({ host: '192.168.1.20', port: 8787 }, 'pr_1', '12345678');
+
+    created[1]?.options.onEvent('transcript.delta', { agentId: 'ag_1', runId: 'run_1', seq: 3, textDelta: 'Wor' });
+
+    expect(onTranscriptEvent).toHaveBeenCalledWith('transcript.delta', expect.objectContaining({ seq: 3 }));
+  });
+
+  it('upserts agents when the host reports an update', async () => {
+    const { app, created } = setup();
+    await app.bootstrap();
+    await app.pair({ host: '192.168.1.20', port: 8787 }, 'pr_1', '12345678');
+
+    created[1]?.options.onEvent('agent.updated', { agent: { ...AGENT, unreadCount: 5 } });
+
+    expect(app.get().agents).toHaveLength(1);
+    expect(app.get().agents[0]?.unreadCount).toBe(5);
+  });
+
+  it('adds a pending approval when it is requested and drops it when resolved', async () => {
+    const { app, created } = setup();
+    await app.bootstrap();
+    await app.pair({ host: '192.168.1.20', port: 8787 }, 'pr_1', '12345678');
+
+    created[1]?.options.onEvent('approval.requested', { approval: APPROVAL });
+    expect(app.get().approvals).toHaveLength(1);
+
+    created[1]?.options.onEvent('approval.resolved', { approval: { ...APPROVAL, status: 'granted' } });
+    expect(app.get().approvals).toHaveLength(0);
+  });
+
+  it('reports a shutdown as a problem the user can act on', async () => {
+    const { app, created } = setup();
+    await app.bootstrap();
+    await app.pair({ host: '192.168.1.20', port: 8787 }, 'pr_1', '12345678');
+
+    created[1]?.options.onEvent('host.shutdown', { reason: 'operator stopped the host' });
+
+    const problem = app.get().problem;
+    expect(problem?.code).toBe('cancelled');
+    expect(problem?.title).toBe('The host is shutting down');
+    expect(problem?.detail).toBe('operator stopped the host');
+  });
+});
+
+describe('app store: host mutations the device may perform', () => {
+  it('creates an agent and lands it in the list', async () => {
+    const { app } = setup({ deviceClass: 'person', handlers: hostHandlers({ 'agents.create': () => AGENT }) });
+    await app.bootstrap();
+    await app.pair({ host: '192.168.1.20', port: 8787 }, 'pr_1', '12345678');
+
+    const created = await app.createAgent('Inbox triage');
+
+    expect(created).toBe(true);
+    expect(app.get().creatingAgent).toBe(false);
+    expect(app.get().agents.map((agent) => agent.id)).toEqual(['ag_1']);
+    expect(app.get().problem).toBeNull();
+  });
+
+  it('resolves a pending approval and clears the busy flag', async () => {
+    const { app } = setup({
+      deviceClass: 'person',
+      handlers: hostHandlers({ 'approvals.resolve': () => ({ approval: { ...APPROVAL, status: 'granted' } }) }),
+    });
+    await app.bootstrap();
+    await app.pair({ host: '192.168.1.20', port: 8787 }, 'pr_1', '12345678');
+
+    await app.resolveApproval('ap_1', true);
+
+    expect(app.get().resolvingApprovalId).toBeNull();
+    expect(app.get().approvals).toHaveLength(0);
+    expect(app.get().problem).toBeNull();
+  });
+
+  it('clears an in-flight create flag when the phone unpairs', async () => {
+    const never = new Promise<Agent>(() => undefined);
+    const { app } = setup({ deviceClass: 'person', handlers: hostHandlers({ 'agents.create': () => never }) });
+    await app.bootstrap();
+    await app.pair({ host: '192.168.1.20', port: 8787 }, 'pr_1', '12345678');
+
+    void app.createAgent('Slow host');
+    expect(app.get().creatingAgent).toBe(true);
+
+    await app.unpair();
+
+    expect(app.get().creatingAgent).toBe(false);
+    expect(app.get().status).toBe('unpaired');
+  });
+});
+
+describe('app store: bootstrap', () => {
+  it('lands on the pairing screen when stored state cannot be read', async () => {
+    const failingSession: SessionStore = {
+      loadHost: () => Promise.reject(new Error('storage is locked')),
+      saveHost: () => Promise.resolve(),
+      loadToken: () => Promise.resolve(null),
+      saveToken: () => Promise.resolve(),
+      clearToken: () => Promise.resolve(),
+    };
+    const app = createAppStore({
+      session: failingSession,
+      createConnection: () => {
+        throw new Error('the connection factory must not be reached');
+      },
+      platform: 'ios',
+      deviceName: () => 'Test iPhone',
+      onTranscriptEvent: () => undefined,
+      onHostReconnected: () => undefined,
+    });
+
+    await app.bootstrap();
+
+    expect(app.get().status).toBe('unpaired');
+    expect(app.get().problem).not.toBeNull();
   });
 });

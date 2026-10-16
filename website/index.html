@@ -23,7 +23,7 @@
 
     <header class="nav">
       <div class="wrap nav-inner">
-        <a class="brand" href="/" aria-label="guhbot home">
+        <a class="brand" href="./" aria-label="guhbot home">
           <img class="brand-logo" src="./assets/logo.svg" alt="guhbot" width="118" height="32" />
         </a>
         <nav class="nav-links" aria-label="Main">
@@ -374,7 +374,7 @@ node packages/server/dist/cli.js --data-dir ~/.guhbot</code></pre>
           </p>
 
           <!-- data-endpoint is what main.js posts to; a deployment overrides it. -->
-          <form class="waitlist" id="waitlist-form" data-endpoint="/api/waitlist" novalidate>
+          <form class="waitlist" id="waitlist-form" data-endpoint="./api/waitlist" novalidate>
             <label class="sr-only" for="email">Email address</label>
             <input
               id="email"

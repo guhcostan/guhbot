@@ -56,7 +56,7 @@ export function ApprovalsScreen(): ReactElement {
           </View>
         }
         ListEmptyComponent={
-          state.loadedAt === null && state.connection.busy ? (
+          state.refreshing ? (
             <View style={styles.loadingRow}>
               <ActivityIndicator color={colors.muted} />
               <Text style={styles.muted}>Asking the host…</Text>

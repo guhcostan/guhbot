@@ -46,12 +46,12 @@ one, that is a vulnerability.
 | An unauthenticated socket may call exactly three methods | `HostServer.handleRequest` | `server.test.ts` |
 | A secret value never appears in a protocol response | No `secrets.get` exists | `host.test.ts` |
 | A secret value is never stored in the clear | `crypto.ts`, AES-256-GCM | `host.test.ts` |
-| A model-supplied path cannot escape the working directory, including through a symlink | `resolveInside` | `loop.test.ts`, `end-to-end.test.ts` |
+| A model-supplied path cannot escape the working directory, including through a symlink | `resolveInside` | `loop.test.ts`, `server/tests/end-to-end.test.ts` |
 | A command runs without a shell, so metacharacters stay literal | `run_command` via `execFile` | `loop.test.ts` |
 | A child process does not inherit secret-looking environment variables | `sanitizeEnv` | `loop.test.ts` |
 | Egress is denied unless a host is explicitly allowed | `http_fetch` | `loop.test.ts` |
 | A capability cannot shadow a core method | `buildRegistry` | `bootstrap.test.ts` |
-| A run that needs a decision parks instead of guessing | `RunContext.requestApproval` | `host.test.ts`, `end-to-end.test.ts` |
+| A run that needs a decision parks instead of guessing | `RunContext.requestApproval` | `host.test.ts`, `server/tests/end-to-end.test.ts` |
 | An approval past its deadline resolves to `expired`, never `granted` | `Store.resolveApproval` | `host.test.ts` |
 
 ## Design decisions that are deliberately restrictive

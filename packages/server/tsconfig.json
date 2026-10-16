@@ -25,6 +25,9 @@
       "path": "../companion"
     },
     {
+      "path": "../credentials"
+    },
+    {
       "path": "../engine-cli"
     },
     {
@@ -32,6 +35,9 @@
     },
     {
       "path": "../mcp"
+    },
+    {
+      "path": "../memory"
     },
     {
       "path": "../messages"

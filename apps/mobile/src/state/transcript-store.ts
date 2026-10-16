@@ -8,7 +8,7 @@
  * a no-op instead of a duplicate, and a reconnect resyncs by asking for
  * everything after the newest seq held.
  */
-import type { EventName, MethodInput, MethodName, MethodOutput } from '@guhbot/protocol';
+import type { Entry, EventName, MethodInput, MethodName, MethodOutput } from '@guhbot/protocol';
 
 import { describeError, type Problem } from '../core/errors';
 import { applyEvent, mergeEntries, newestSeq, oldestSeq, type TranscriptItem } from '../core/transcript';
@@ -105,12 +105,10 @@ export function createTranscriptStore(deps: TranscriptStoreDeps): TranscriptStor
       const last = page.entries.at(-1);
       patch({
         items: mergeEntries(store.get().items, agentId, page.entries),
-        coveredThrough:
-          page.nextCursor === null
-            ? Math.max(current.coveredThrough, current.windowStart ?? current.coveredThrough)
-            : last === undefined
-              ? current.coveredThrough
-              : Math.max(current.coveredThrough, last.seq),
+        // `nextCursor` is null on the final page, where `last` is the newest
+        // entry of history: that is exactly the highest seq held contiguously
+        // from the start, so the cursor advances to it and paging can stop.
+        coveredThrough: last === undefined ? current.coveredThrough : Math.max(current.coveredThrough, last.seq),
         loadingOlder: false,
         problem: null,
       });
@@ -127,11 +125,21 @@ export function createTranscriptStore(deps: TranscriptStoreDeps): TranscriptStor
     patch({ resyncing: true });
     try {
       const newest = newestSeq(current.items);
-      const entries =
-        newest === null
-          ? (await deps.request('transcript.tail', { agentId, limit: TAIL_SIZE })).entries
-          : (await deps.request('transcript.page', { agentId, afterSeq: newest, limit: PAGE_SIZE })).entries;
-      patch({ items: mergeEntries(store.get().items, agentId, entries), resyncing: false, status: 'ready', problem: null });
+      const collected: Entry[] = [];
+      if (newest === null) {
+        collected.push(...(await deps.request('transcript.tail', { agentId, limit: TAIL_SIZE })).entries);
+      } else {
+        let cursor: number | undefined = newest;
+        // The host only hands out a cursor while the page is full, so this loop
+        // ends exactly when the last page has been sent: a gap bigger than one
+        // page is recovered by asking again, not by stopping after the first.
+        while (cursor !== undefined) {
+          const page: MethodOutput<'transcript.page'> = await deps.request('transcript.page', { agentId, afterSeq: cursor, limit: PAGE_SIZE });
+          collected.push(...page.entries);
+          cursor = page.nextCursor === null ? undefined : Number(page.nextCursor);
+        }
+      }
+      patch({ items: mergeEntries(store.get().items, agentId, collected), resyncing: false, status: 'ready', problem: null });
     } catch (error) {
       patch({ resyncing: false, problem: describeError(error) });
     }

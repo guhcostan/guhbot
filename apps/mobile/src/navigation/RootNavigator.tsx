@@ -42,7 +42,7 @@ export function RootNavigator(): ReactElement {
     <Stack.Navigator
       screenOptions={{
         contentStyle: { backgroundColor: colors.background },
-        headerStyle: { backgroundColor: '#0b0e12' },
+        headerStyle: { backgroundColor: colors.sidebar },
         headerTintColor: colors.text,
         headerTitleStyle: { fontSize: 16, fontWeight: '700' },
         headerShadowVisible: false,

@@ -5,11 +5,13 @@
     <!--
       The renderer loads only its own bundle. No remote script, no inline script,
       no eval. The host connection is a WebSocket to loopback, so `connect-src`
-      names that and nothing else.
+      names that and nothing else. `frame-ancestors` is deliberately absent: it
+      is ignored in a meta-delivered policy, and keeping it would imply a
+      protection that is not there.
     -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src ws://127.0.0.1:* ws://localhost:*; form-action 'none'; base-uri 'none'; frame-ancestors 'none'"
+      content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src ws://127.0.0.1:* ws://localhost:*; form-action 'none'; base-uri 'none'"
     />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>guhbot</title>

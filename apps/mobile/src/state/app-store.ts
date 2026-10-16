@@ -418,6 +418,10 @@ export function createAppStore(deps: AppStoreDeps): AppStore {
         refreshing: false,
         problem: null,
         pairing: { busy: false, error: null },
+        // A refused or completed create/resolve must not leave a stale busy flag
+        // behind on the pairing screen that follows an unpair.
+        creatingAgent: false,
+        resolvingApprovalId: null,
       });
     },
 

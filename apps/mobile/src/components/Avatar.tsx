@@ -17,7 +17,7 @@ export function Avatar({ name, size = 36 }: { readonly name: string; readonly si
 
 const styles = StyleSheet.create({
   circle: { alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  text: { color: '#06130c', fontWeight: '800' },
+  text: { color: colors.accentInk, fontWeight: '800' },
 });
 
 export function EmptyState({

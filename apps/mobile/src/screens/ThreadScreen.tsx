@@ -1,7 +1,7 @@
 import type { Entry } from '@guhbot/protocol';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useEffect, useRef, type ReactElement } from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
 import { EmptyState } from '../components/Avatar';
 import { ConnectionBanner } from '../components/ConnectionBanner';
@@ -51,6 +51,12 @@ export function ThreadScreen({ route }: Props): ReactElement {
         ListHeaderComponent={
           <View>
             <ConnectionBanner view={appState.connection} onRetry={() => void app.reconnect()} />
+            {transcript.resyncing ? (
+              <View style={styles.resyncRow}>
+                <ActivityIndicator color={colors.muted} />
+                <Text style={styles.muted}>Updating the transcript…</Text>
+              </View>
+            ) : null}
             {transcript.problem === null ? null : (
               <NoticeCard
                 tone={transcript.problem.retryable ? 'warn' : 'bad'}
@@ -90,6 +96,9 @@ export function ThreadScreen({ route }: Props): ReactElement {
           ) : (
             <EmptyState mark="✦" title="Nothing here yet" detail="This agent has no transcript entries. Send it something from the host to start." />
           )
+        }
+        refreshControl={
+          <RefreshControl refreshing={appState.refreshing} onRefresh={() => void app.refresh()} tintColor={colors.muted} />
         }
         renderItem={({ item }) => <TranscriptRow item={item} />}
       />
@@ -159,19 +168,19 @@ const styles = StyleSheet.create({
   },
   loadOlderText: { color: colors.text, fontSize: 13, fontWeight: '700' },
   pressed: { opacity: 0.6 },
+  resyncRow: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm, paddingVertical: spacing.lg },
   rowLeft: { alignItems: 'flex-start', marginBottom: spacing.md },
   rowRight: { alignItems: 'flex-end', marginBottom: spacing.md },
   bubble: { borderRadius: radius.md, borderWidth: StyleSheet.hairlineWidth, maxWidth: '88%', padding: spacing.md },
-  userBubble: { backgroundColor: '#1b2634', borderColor: '#2a3a4e', borderBottomRightRadius: 5 },
+  userBubble: { backgroundColor: colors.surfaceRaised, borderColor: colors.borderSoft, borderBottomRightRadius: 5 },
   agentBubble: { backgroundColor: colors.surface, borderColor: colors.borderSoft, borderBottomLeftRadius: 5 },
-  errorBubble: { borderColor: colors.bad },
   agentMark: { color: colors.accent, fontSize: fontSize.meta, fontWeight: '700', marginBottom: spacing.xs },
   agentBody: { color: colors.text, fontSize: fontSize.body, lineHeight: 21 },
-  userBody: { color: '#e8eef5', fontSize: fontSize.body, lineHeight: 21 },
+  userBody: { color: colors.text, fontSize: fontSize.body, lineHeight: 21 },
   userMeta: { color: colors.faint, fontSize: fontSize.meta, marginTop: spacing.xs, textAlign: 'right' },
   cursor: { color: colors.accent, fontWeight: '800' },
   tool: {
-    backgroundColor: '#0c1015',
+    backgroundColor: colors.surface,
     borderColor: colors.borderSoft,
     borderRadius: radius.sm,
     borderWidth: StyleSheet.hairlineWidth,
@@ -179,7 +188,7 @@ const styles = StyleSheet.create({
     padding: spacing.sm,
   },
   toolResult: { borderStyle: 'dashed' },
-  toolHead: { color: '#8fa0ae', fontFamily: 'monospace', fontSize: 12, fontWeight: '700', marginBottom: 4 },
+  toolHead: { color: colors.muted, fontFamily: 'monospace', fontSize: 12, fontWeight: '700', marginBottom: 4 },
   toolBody: { color: colors.muted, fontFamily: 'monospace', fontSize: 12, lineHeight: 17 },
   system: {
     alignSelf: 'center',

@@ -36,6 +36,9 @@
     },
     {
       "path": "packages/scheduler"
+    },
+    {
+      "path": "packages/server"
     }
   ]
 }

@@ -35,6 +35,8 @@ export interface HostState {
   runs: Record<string, Run>;
   approvals: Approval[];
   error: string | null;
+  /** The approval a human is answering right now, so buttons can stay honest. */
+  resolvingApprovalId: string | null;
 }
 
 const EMPTY: HostState = {
@@ -47,6 +49,7 @@ const EMPTY: HostState = {
   runs: {},
   approvals: [],
   error: null,
+  resolvingApprovalId: null,
 };
 
 export interface HostApi {
@@ -69,6 +72,21 @@ export function applyReady(prev: HostState, payload: unknown): HostState {
   const { deviceClass } = (payload ?? {}) as { deviceClass?: unknown };
   if (deviceClass !== 'person' && deviceClass !== 'background') return prev;
   return { ...prev, deviceClass };
+}
+
+/**
+ * The message half of an error. RPC failures arrive as plain `RpcError`
+ * objects (a `{ code, message }` bag from the wire), not as `Error` instances,
+ * so every surface that renders a failure has to read the message off that
+ * union rather than assume one shape.
+ */
+export function errorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'object' && error !== null && 'message' in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === 'string') return message;
+  }
+  return String(error);
 }
 
 /**
@@ -131,24 +149,30 @@ export function useHost(): HostApi {
   const activeAgentRef = useRef<string | null>(null);
 
   const refresh = useCallback(async (client: GuhbotClient, agentId: string | null) => {
-    const [status, agents, approvals] = await Promise.all([
-      client.request('host.status', {}),
-      client.request('agents.list', {}),
-      client.request('approvals.list', { status: 'pending' }),
-    ]);
-    const target = agentId ?? agents.agents[0]?.id ?? null;
-    const entries = target ? (await client.request('transcript.tail', { agentId: target, limit: 80 })).entries : [];
-    activeAgentRef.current = target;
-    setState((prev) => ({
-      ...prev,
-      status: 'ready',
-      host: status,
-      agents: agents.agents,
-      approvals: approvals.approvals,
-      activeAgentId: target,
-      entries,
-      error: null,
-    }));
+    try {
+      const [status, agents, approvals] = await Promise.all([
+        client.request('host.status', {}),
+        client.request('agents.list', {}),
+        client.request('approvals.list', { status: 'pending' }),
+      ]);
+      const target = agentId ?? agents.agents[0]?.id ?? null;
+      const entries = target ? (await client.request('transcript.tail', { agentId: target, limit: 80 })).entries : [];
+      activeAgentRef.current = target;
+      setState((prev) => ({
+        ...prev,
+        status: 'ready',
+        host: status,
+        agents: agents.agents,
+        approvals: approvals.approvals,
+        activeAgentId: target,
+        entries,
+        error: null,
+      }));
+    } catch (error) {
+      // A failed re-read is a renderable state, never an unhandled rejection:
+      // the error bar shows what happened and the next reconnect retries.
+      setState((prev) => ({ ...prev, error: errorMessage(error) }));
+    }
   }, []);
 
   useEffect(() => {
@@ -164,8 +188,7 @@ export function useHost(): HostApi {
       onError: (error) => {
         // A `forbidden` response is an expected state, not a failure: this device
         // simply is not allowed to do that. Surface it without tearing down.
-        const message = 'message' in error ? error.message : String(error);
-        setState((prev) => ({ ...prev, error: message }));
+        setState((prev) => ({ ...prev, error: errorMessage(error) }));
       },
     });
     clientRef.current = client;
@@ -212,7 +235,7 @@ export function useHost(): HostApi {
       setState((prev) => ({
         ...prev,
         status: 'offline',
-        error: error instanceof Error ? error.message : String(error),
+        error: errorMessage(error),
       }));
     });
 
@@ -231,7 +254,11 @@ export function useHost(): HostApi {
         void client
           .request('transcript.tail', { agentId, limit: 80 })
           .then((page) => setState((prev) => (prev.activeAgentId === agentId ? { ...prev, entries: page.entries } : prev)))
-          .catch(() => undefined);
+          .catch((error: unknown) => {
+            // A failed switch is a renderable state, not a silent swallow: the
+            // thread keeps its empty state honest and the error bar explains why.
+            setState((prev) => ({ ...prev, error: errorMessage(error) }));
+          });
       }
     },
     [],
@@ -244,19 +271,20 @@ export function useHost(): HostApi {
     try {
       await client.request('runs.start', { agentId, prompt: text });
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      setState((prev) => ({ ...prev, error: message }));
+      setState((prev) => ({ ...prev, error: errorMessage(error) }));
     }
   }, []);
 
   const resolveApproval = useCallback(async (approvalId: string, granted: boolean) => {
     const client = clientRef.current;
     if (!client) return;
+    setState((prev) => ({ ...prev, resolvingApprovalId: approvalId }));
     try {
       await client.request('approvals.resolve', { approvalId, granted });
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      setState((prev) => ({ ...prev, error: message }));
+      setState((prev) => ({ ...prev, error: errorMessage(error) }));
+    } finally {
+      setState((prev) => ({ ...prev, resolvingApprovalId: null }));
     }
   }, []);
 
