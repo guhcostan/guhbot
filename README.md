@@ -9,7 +9,7 @@ your files, your shell and your browser — and every operation they can perform
 classified by whether it needs a human present.
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-67e8a2?style=flat-square)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-660%20passing-67e8a2?style=flat-square)](#testing)
+[![Tests](https://img.shields.io/badge/tests-671%20passing-67e8a2?style=flat-square)](#testing)
 [![Node](https://img.shields.io/badge/node-%E2%89%A522.5-339933?style=flat-square&logo=nodedotjs&logoColor=white)](#quick-start)
 
 [Website](https://d1490grrgfw1sj.cloudfront.net) · [Security](SECURITY.md) · [Architecture](docs/architecture.md) · [Reverse-engineering dossier](docs/re/00-index.md)
@@ -191,7 +191,7 @@ stored unencrypted, and there is no cost budget per agent.
 pnpm test
 ```
 
-**660 tests** across 44 files, concentrating on properties that would be dangerous
+**671 tests** across 45 files, concentrating on properties that would be dangerous
 to get wrong rather than on coverage. Four more run against a live model when
 credentials are present.
 
