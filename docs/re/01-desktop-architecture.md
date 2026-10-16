@@ -790,8 +790,8 @@ subsection.
 #### (a) Main application window - `dist/electron-main/main-core.cjs`
 
 **PROVEN byte-exact.** The shipped literal, read directly from
-`dist/electron-main/main-app... main-core.cjs` line 141 columns 12105-12604 (this is the exact range REA
-recorded for its `browser-window` node, and it is the single most important security artifact in the app):
+`dist/electron-main/main-core.cjs` line 141 columns 12105-12604. This is the exact range REA recorded for its
+`browser-window` node, and it is the single most important security artifact in the app:
 
 ```js
 new ar.BrowserWindow({...l.windowOptions,
@@ -2464,3 +2464,259 @@ instantiated from the renderer document under the shipped policy. **INFERRED**: 
 main process or by the exec daemon, both of which are outside CSP.
 
 ---
+## 8. Limitations of this analysis
+
+### 8.1 REA's stated coverage
+
+**PROVEN** (`recon/rea/js-application.json`):
+
+| Field | Value |
+|---|---|
+| `evidence_id` | `ev_77595523d6453848862a9e158ce74e1140c03a4fd25af7736a669c94f723e810` |
+| `subject.digest.sha256` | `4b5d0d93775f53a59a5190af9ca3190889ced8677052b357a6fa19b2ab1d94b2` |
+| `subject.local_path` | `/Users/gustavo/Projetos/guhbot/recon/grokbot-0.71.2` |
+| `normalized_result.input_path` | same |
+| `normalized_result.root_artifact_sha256` | `4b5d0d93775f53a59a5190af9ca3190889ced8677052b357a6fa19b2ab1d94b2` |
+| `confidence` | `"derived"` |
+| `authority` | `"shipped-artifact"` |
+| `operation` | `analyze_javascript_application` |
+| `parameters` | `{"format":"auto","integrity_policy":"fail","max_semantic_nodes":40000,"analysis_timeout_ms":120000}` |
+| `integrity_contradictions` | `[]` (none) |
+| `nested_asar_containers` | `0` |
+| `relevant_files` | 612 |
+| `text_bytes_read` | 42,107,632 |
+| `parsed_javascript_files` | 594 |
+| `visited_ast_nodes` | 6,067,269 |
+| `findings` | 14,806 |
+| `modules` | 17 |
+| `parse_failures` | **4** |
+| `invalid_utf8_files` | **3** |
+| `normalized_result.semantic_graph.coverage` | `{"status":"partial","truncated":true}` |
+
+**Coverage is `partial` and `truncated: true`.** This is the headline limitation and it propagates into
+everything in this document that cites REA.
+
+### 8.2 The stated budgets and ceilings
+
+**PROVEN** (`normalized_result.semantic_graph.coverage.limits`):
+
+| Limit name | Value | Unit | Consequence |
+|---|---|---|---|
+| `javascript_analysis_worker_heap_limit_bytes` | 1,098,907,648 | bytes | ~1 GiB worker heap |
+| `javascript_analysis_worker_timeout_ms` | 120,000 | ms | 2 minutes per analysis |
+| `semantic_graph_file_node_ceiling` | 20,000 | items | |
+| `semantic_graph_node_ceiling` | **40,000** | items | **Hit exactly**: `semantic_graph.nodes.length === 40000` |
+
+The semantic graph therefore is not merely "partial" in a soft sense: its node list is **at the configured
+ceiling**. `semantic_graph.relations.length === 31779` with `coverage.families` reporting per-family
+retention (`boundary` 36 retained, `call-flow` 2228 retained) and, for every family, a non-empty
+`unknown_ids` list. Reconstructed node-kind census over those 40,000 nodes: `expression` 15,709,
+`function` 7,699, `binding` 6,737, `parameter` 5,871, `call-site` 1,910, `property-slot` 1,188,
+`return-site` 696, `module` 49, `boundary` 36, `promise` 33, `literal` 33, `listener` 10, `event` 8,
+`stdio` 5, `child-process` 5, `timer` 4, `request` 3, `task` 2, `signal` 1, `config-source` 1.
+
+### 8.3 The crash
+
+**PROVEN** (`normalized_result.limitations[12]`, and `limitations[12]` at the top level):
+
+> `"dist/electron-main/main-app.cjs: Resource constraint during analyze_javascript_application: Maximum call stack size exceeded"`
+
+`dist/electron-main/main-app.cjs` is 2,626,453 bytes on a small number of extremely long lines; the minified
+form nests deeply enough that the analyzer's recursive walk overflowed the call stack. The practical effect
+is recorded in the per-file status below: `main-app.cjs` is `parse_status: "partial"`.
+
+### 8.4 The full per-file status picture
+
+**PROVEN** (`graph.nodes[kind=javascript-asset]`, 596 nodes): `text_status` is
+`{"included": 594, "invalid-utf8": 2}` and `parse_status` is
+`{"complete": 528, "partial": 62, "failed": 4}`.
+
+**Files that failed to parse entirely (4)**:
+
+| File | Note |
+|---|---|
+| `dist/renderer/assets/dune-render-trace-hook-265eb7be.js` | the render-trace hook, i.e. the first script the renderer executes (6.1) |
+| `dist/renderer/assets/index-wlkGG389.js` | **the renderer's main entry chunk** |
+| `dist/renderer/assets/chunk-DefaultCode-BmFCSgZD.js` | the default code-renderer chunk |
+| `dist/electron-main/chrome-import-worker.cjs` | the Chrome cookie import worker |
+
+**Files that are not valid UTF-8 (2)**: `dist/renderer/assets/pdf.worker.min-qwK7q_zL.mjs` and
+`dist/renderer/assets/desktop-mount-panel-BOOo14LZ.js`. Both are recorded `text_status: "invalid-utf8"`, so
+REA has no text-level view of them. The `dist/renderer/index.html` HTML artifact is likewise recorded
+`text_status: "invalid-utf8"` (this is the `0x82` byte from the note at the top of this document), which
+means the CSP in 3.7 was read by this analysis directly from the file rather than taken from REA.
+
+**Partial parses (62)**, i.e. the files this analysis must treat as incompletely covered. The ones that
+matter for this document:
+
+| File | Why it matters here |
+|---|---|
+| `dist/electron-main/main-app.cjs` | the crash target; source of the coordinator and exec-daemon supervision, the panel window, canvas and 1Password |
+| `dist/electron-main/main-core.cjs` | the main window, all six scheme registrations, the `sand:` plumbing |
+| `dist/electron-main/proto.cjs` | protobuf descriptors |
+| `dist/electron-main/onepassword-connection-service.cjs` | unpacked service |
+| `dist/electron-preload/preload.cjs` | **the entire contextBridge surface of section 4** |
+| `dist/electron-preload/preload-vnc.cjs` | six of the 21 `sand:` channels |
+| `dist/electron-preload/preload-desktop-mount-panel.cjs` | the panel's `desktopMount` |
+| `dist/electron-preload/preload-avatar-source.cjs` | `sand:avatar-source` |
+| `dist/local-exec-daemon/main.cjs` | the exec daemon |
+| `dist/local-exec-daemon/messages-worker.cjs` | the Messages worker |
+| `dist/node-agent-coordinator/main.cjs` | the coordinator |
+| `dist/renderer/assets/index.eager-vendor--EXc1dae.js`, `index.eager-app-DSuGVQNC.js`, `index.eager-platform-DKZJbDqM.js` | three of the four eager shell chunks |
+| `dist/renderer/assets/chunk-prompt-editor-A2oxbQX4.js` | the modulepreloaded prompt editor |
+| `dist/renderer/assets/chunk-xlsx-UGAa5ljQ.js`, `chunk-pdf-CyhaVadp.js`, `chunk-katex-CBoxBzRj.js`, `chunk-mermaid.core-TFw7hG2t.js`, `chunk-cytoscape.esm-CY9iOoO4.js`, `chunk-react-d93AkbuX.js`, `chunk-sentry-sdk-PLjTmxr8.js` | the heavy vendor subsystems of section 6.2 |
+| `dist/renderer/assets/chunk-view-*.js` (3 of 62), `chunk-settings-*`, `chunk-session-*`, `chunk-layout-*`, `chunk-graph-*`, `chunk-document-page-*`, `chunk-interaction-scope-*`, `chunk-new-chat-bar-*`, `chunk-wipe-navigation-*`, `chunk-team-setup-new-skill-dialog-*`, `chunk-sentry-sdk-*`, `chunk-index-*` (3 of 6), `chunk-chunk-*` (6) | feature chunks |
+
+**This is the single most important caveat for the whole document.** Every claim in section 4 rests on
+reading `preload.cjs` directly, and REA's view of that file is `partial`. Claims in this document are
+therefore grounded in the *file contents*, not in REA's graph, wherever the two could differ - and every
+quantitative statement that comes from REA is labelled as such.
+
+### 8.5 REA's stated limitations, verbatim (all 13)
+
+Reproduced in full so a downstream reader can judge each claim. Order preserved.
+
+1. "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the
+   inventoried artifact container."
+2. "Dynamic IPC channel expressions remain unresolved and are never paired by textual similarity."
+3. "Electron API identity follows proven lexical module aliases and structurally verified module-namespace
+   interop. Other reassignments, dynamic selections, and visibly overwritten namespace members are
+   unresolved; missing findings do not establish absence. Arbitrary call side effects and runtime
+   registration are not evaluated."
+4. "Electron relationships are derived from inert syntax; runtime registration, reachability, defaults, and
+   enforcement remain unproven."
+5. "Graph coverage is incomplete; unavailable facts remain explicit and must not be read as absence."
+6. "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed."
+7. "Primitive string-byte budget exceeded (maximum 1048576 estimated JSON bytes)."
+8. "Sender, frame, URL, and origin checks are observations only; REA does not claim that they enforce a
+   complete authorization policy."
+9. "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime
+   execution."
+10. "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated."
+11. "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle
+    bootstrap code."
+12. "dist/electron-main/main-app.cjs: Resource constraint during analyze_javascript_application: Maximum call
+    stack size exceeded"
+13. `semantic_graph.limitations` adds the cap statement (paraphrased here because it is a structured field,
+    not a string): the semantic graph is truncated at the configured node ceiling.
+
+Per-node evidence also carries its own limitation text on every Electron boundary observation:
+
+* "AST coverage is incomplete; omitted or dynamic facts must not be interpreted as absence."
+* "Only explicitly present webPreferences are reported; omitted properties are not interpreted as Electron
+  defaults."
+
+**Limitation 7** ("Primitive string-byte budget exceeded") explains why REA's `ipc-channel` nodes often carry
+`channel_expression` (a short identifier such as `$t`, `Yt`, `AHe`) rather than the resolved literal: the
+string-interning budget was exhausted, so later string detail was dropped. That is also why this document
+resolved all 21 channel literals by direct `grep -oE '"sand:[a-z0-9-]+"'` over the beautified bundles
+instead of trusting the graph.
+
+### 8.6 What remains unanswered
+
+Marked explicitly, with what was tried.
+
+| # | Open question | Marker | What was tried |
+|---|---|---|---|
+| 1 | The exact runtime value of `additionalArguments` on the main window, and therefore whether `__duneRenderTraceSampleRate` is exposed and at what rate | **UNKNOWN** | Read `yP({version, track})` construction in `main-core`; the argument list is built from the render-trace configuration and CLI flags. Not resolved. |
+| 2 | The exact decision table inside `m1(linuxInstall)` that produces `v8CacheOptions` | **UNKNOWN** | Named but not read; it is a function call in the window options. |
+| 3 | Whether `sandbox` is effectively `true` on the WebAuthn consent window (site c) | **UNKNOWN by literal** | The literal omits it. Electron's default makes it true, but REA's per-node limitation forbids treating omission as a default, so this document does not claim it. |
+| 4 | The header names injected into the VNC partition's requests | **UNKNOWN** | The mechanism is proven (`onBeforeSendHeaders` reading a per-host map), but the literal names are not in the bundle as constants. |
+| 5 | Which process instantiates `web-tree-sitter`'s `.wasm` | **UNKNOWN** | The renderer CSP forbids WASM under `script-src 'self'`; the WASM is shipped. No load site was found in the beautified text. |
+| 6 | Whether `preload-sand-dev.cjs` exists in any distribution | **UNKNOWN** | It is named by `Ig(...)` but absent from the payload; it is presumably dev-harness-only. |
+| 7 | Full behaviour of the `<webview>` origin allowlist `o` and `routeHostInput` | **UNKNOWN** | The set is populated (`o.add(...)`) and read; its full membership and the router's policy were not enumerated. |
+| 8 | Why every shipped JS/HTML file has a stray leading byte | **UNKNOWN** | Byte census over all 534 renderer `.js` files plus targeted reads of `main.cjs` and both HTML documents. The bytes are in the asar. No build metadata explains them. |
+| 9 | The complete `main-app.cjs` surface, the coordinator's 172 methods, and the exec daemon's policy engine | **UNKNOWN here, out of scope** | These are `parse_status: "partial"` and are the subject of the coordinator and exec-daemon sections of this dossier; they are referenced but not re-derived in this document. |
+| 10 | Whether main-app ever constructs a seventh `BrowserWindow` in a code path REA and this analysis both missed | **UNKNOWN** | Six sites found by reading the bundles plus four REA nodes reconciled byte-exact (3.2). Given `main-app.cjs` is `partial` in REA and 2.6 MB of minified code, absence cannot be proven. |
+
+### 8.7 What this document does and does not establish
+
+To be unambiguous about the epistemics:
+
+* **Established by direct read of shipped bytes**: the process topology, every bundle size and path, the
+  bootstrap ordering and loader semantics, all six window/`WebContentsView` `webPreferences` literals, all
+  six custom schemes and their privileges, both CSPs verbatim, all six contextBridge global names, the
+  308-method `main` edge and 12-method `desktop-mount` edge declarations, all 21 `sand:` channel literals,
+  the `createKey` correction, the renderer load graph and chunk census, the native dependency manifest.
+* **Established with a stated inference step**: the `remainderDue` semantics, the user-gesture gate in 3.6,
+  the single-claimant port lease rationale, the asar/unpacked security split, the locale-family hypothesis
+  for the repeated chunk names, the split between named channels and structured RPC.
+* **Not established**: anything about runtime behaviour. No bundle was executed. No IPC message was
+  observed. No network request was made. Whether any of these policies is *enforced* as written is unproven;
+  REA's limitation 4 and 8 say the same about its own observations, and this document does not claim more.
+
+---
+
+## Appendix A - Citation index
+
+Shipped payload (`recon/grokbot-0.71.2/`), by section:
+
+| Path | Cited in |
+|---|---|
+| `package.json` | 1.1, preamble |
+| `dist/electron-main/main.cjs` | 2.1-2.8 |
+| `dist/electron-main/main-core.cjs` | 1.1, 2.7, 3.1(a), 3.2, 3.5, 3.6, 4.2, 4.5, 5.1, 5.2, 5.3 |
+| `dist/electron-main/main-app.cjs` | 1.1, 1.4, 3.1(b)-(g), 3.2, 3.4, 5.1, 5.3 |
+| `dist/electron-main/proto.cjs` | 1.1 |
+| `dist/electron-main/chrome-import-worker.cjs` | 1.1, 8.4 |
+| `dist/electron-main/onepassword-connection-service.cjs` | 1.1, 7.2 |
+| `dist/electron-main/locales/` | 1.1 |
+| `dist/electron-preload/preload.cjs` | 1.1, 4.1-4.7, 5.1, 5.3 |
+| `dist/electron-preload/preload-desktop-mount-panel.cjs` | 1.1, 4.1, 4.3 |
+| `dist/electron-preload/preload-vnc.cjs` | 1.1, 3.4, 5.1 |
+| `dist/electron-preload/preload-webview.cjs` | 1.1, 3.4, 5.1 |
+| `dist/electron-preload/preload-avatar-source.cjs` | 1.1, 3.1(g), 5.1 |
+| `dist/node-agent-coordinator/main.cjs` | 1.1, 1.4, 5.1 |
+| `dist/local-exec-daemon/main.cjs` | 1.1, 1.5, 5.1, 8.4 |
+| `dist/local-exec-daemon/messages-worker.cjs` | 1.1, 1.5 |
+| `dist/renderer/index.html` | 3.7, 4.5, 6.1 |
+| `dist/renderer/src/electron-renderer/desktop-mount/panel/panel.html` | 3.8, 6.1 |
+| `dist/renderer/assets/` | 6.1, 6.2, 8.4 |
+| `dist/deps/runtime-deps-manifest.json` | 7.1 |
+| `dist/deps/*` | 7.1, 7.3 |
+
+Beautified bundles (`recon/beautified/`): `main-core.beauty.js`, `main-app.beauty.js`,
+`preload.beauty.js`, `preload-vnc.beauty.js`, `preload-webview.beauty.js`, `coordinator.beauty.js`,
+`exec-daemon.beauty.js`, `messages-worker.beauty.js` - cited by line throughout, with the caveat in
+"Citation conventions".
+
+Sealed evidence (`recon/rea/js-application.json`), by section:
+
+| Projection path | Cited in |
+|---|---|
+| `evidence_id`, `subject`, `confidence`, `authority`, `operation`, `parameters` | 8.1 |
+| `normalized_result.summary` | 1.6, 3.2, 4.1, 5.3 |
+| `normalized_result.statistics` | 8.1 |
+| `normalized_result.limitations[0..12]` | 3.2, 5.3, 8.3, 8.5 |
+| `normalized_result.graph.nodes[kind=browser-window]` | 3.2 |
+| `normalized_result.graph.nodes[kind=context-bridge-api]` | 4.1 |
+| `normalized_result.graph.nodes[kind=ipc-channel]`, `[kind=ipc-handler]` | 5.3 |
+| `normalized_result.graph.nodes[kind=electron-utility]` | 1.6 |
+| `normalized_result.graph.nodes[kind=worker]` | 1.6 |
+| `normalized_result.graph.nodes[kind=native-addon]`, `[kind=native-export]`, `[kind=package]` | 7.1 |
+| `normalized_result.graph.nodes[kind=javascript-asset]` | 8.4 |
+| `normalized_result.graph.nodes[kind=artifact]` | preamble, 8.4 |
+| `normalized_result.semantic_graph.coverage`, `.limits`, `.nodes`, `.relations` | 8.2 |
+
+macOS bundle (`/Applications/Grok Bot.app/Contents/`):
+
+| Path | Cited in |
+|---|---|
+| `Info.plist` | 1.2, 1.3, 3.5, 3.9 |
+| `Helpers/Grok Bot Computer Use.app/Contents/Info.plist` | 1.3 |
+| `Frameworks/` | 1.2 |
+| `Resources/app.asar.unpacked/` | 1.3, 7.2 |
+| `CodeResources`, `_CodeSignature/` | 1.2 (integrity) |
+
+---
+
+## Appendix B - Corrections issued against `recon/FINDINGS.md`
+
+| FINDINGS claim | Correction | Section |
+|---|---|---|
+| "preloads (4 of them)" | The payload ships **five** preload `.cjs` files; four are window/webview-attached, one belongs to a headless `WebContentsView` | 1.1 |
+| `slack-canvas`, `active-user-store-canvas`, `resolve-media` listed as protocol schemes | None are schemes. The first two are resource-locator `kind` tags; `resolve-media` is a failure-report leg label. The real scheme set is the six registered in `EL()` plus `file` | 3.5 |
+| `t.createKey(<name>)` presented as an app IPC key factory under "Literal `sand:` IPC channels" | It is `@sentry/electron`'s renderer IPC namespace factory; keys evaluate to `<ipcNamespace>.<verb>`, not `sand:<verb>` | 5.2 |
+| Coordinator loopback allowlist `new Set(["localhost","127.0.0.1","::1","[::1]"])` attributed to the coordinator only | The identical literal is present in **both** the coordinator and the exec daemon | 1.4 |
+| Exec-daemon env listed as `SAND_LOCAL_EXEC_GENERATION` | The child env adds **two** variables: `SAND_LOCAL_EXEC_GENERATION` and `NODE_USE_SYSTEM_CA=1`, and explicitly deletes `ELECTRON_RUN_AS_NODE` | 1.5 |
+| "`contextIsolation: true` (literal `!0`) observed on the main window" | Correct, and now extended to all six windows plus the `WebContentsView`, with the four REA node ranges reconciled byte-exact | 3.1, 3.2 |

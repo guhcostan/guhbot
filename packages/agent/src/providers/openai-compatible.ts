@@ -27,11 +27,20 @@ export interface OpenAiCompatibleOptions {
   fetchImpl?: typeof fetch;
 }
 
+/**
+ * One streamed tool-call fragment.
+ *
+ * Note the nesting: on the wire the call id sits beside the function, while the
+ * name and the JSON argument string are inside `function`. They arrive as
+ * separate deltas that have to be concatenated per index.
+ */
 interface StreamingToolCallFragment {
   index: number;
   id?: string;
-  name?: string;
-  arguments?: string;
+  function?: {
+    name?: string;
+    arguments?: string;
+  };
 }
 
 interface ChatCompletionChunk {
@@ -173,8 +182,10 @@ export class OpenAiCompatibleProvider implements ModelProvider {
         const index = fragment.index ?? 0;
         const current = pending.get(index) ?? { id: '', name: '', args: '' };
         if (fragment.id) current.id = fragment.id;
-        if (fragment.name) current.name += fragment.name;
-        if (fragment.arguments) current.args += fragment.arguments;
+        // Name and arguments accumulate: a provider may split either across
+        // chunks, and the argument string in particular arrives in pieces.
+        if (fragment.function?.name) current.name += fragment.function.name;
+        if (fragment.function?.arguments) current.args += fragment.function.arguments;
         pending.set(index, current);
       }
 
