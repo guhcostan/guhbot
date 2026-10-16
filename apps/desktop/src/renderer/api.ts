@@ -198,7 +198,14 @@ export function useHost(): HostApi {
     });
     client.on('agent.updated', (payload) => {
       const { agent } = payload as { agent: Agent };
-      setState((prev) => ({ ...prev, agents: prev.agents.map((a) => (a.id === agent.id ? agent : a)) }));
+      // Upsert, not replace: the host emits this for creations too, so a new
+      // agent appears in the sidebar without a reconnect.
+      setState((prev) => ({
+        ...prev,
+        agents: prev.agents.some((a) => a.id === agent.id)
+          ? prev.agents.map((a) => (a.id === agent.id ? agent : a))
+          : [...prev.agents, agent],
+      }));
     });
 
     void client.connect().catch((error: unknown) => {

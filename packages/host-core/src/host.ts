@@ -672,7 +672,13 @@ const HANDLERS: HandlerTable = {
     if (!agent) throw new HostError('not-found', `no agent ${input.agentId}`);
     return agent;
   },
-  'agents.create': async (host, _session, input) => host.store.createAgent(input),
+  'agents.create': async (host, _session, input) => {
+    const agent = host.store.createAgent(input);
+    // Clients upsert on `agent.updated`, so a creation must speak too:
+    // otherwise a phone watching the list never learns the agent exists.
+    host.emitEvent('agent.updated', { agent });
+    return agent;
+  },
   'agents.update': async (host, _session, input) => {
     const { agentId, ...patch } = input;
     const updated = host.store.updateAgent(agentId, patch);
@@ -684,7 +690,9 @@ const HANDLERS: HandlerTable = {
   'agents.duplicate': async (host, _session, input) => {
     const source = host.store.getAgent(input.agentId);
     if (!source) throw new HostError('not-found', `no agent ${input.agentId}`);
-    return host.store.createAgent({ name: `${source.name} (copy)`, instructions: source.instructions, model: source.model });
+    const copy = host.store.createAgent({ name: `${source.name} (copy)`, instructions: source.instructions, model: source.model });
+    host.emitEvent('agent.updated', { agent: copy });
+    return copy;
   },
 
   'groups.list': async (host) => ({ groups: host.store.listGroups() }),

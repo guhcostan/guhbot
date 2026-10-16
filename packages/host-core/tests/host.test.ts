@@ -338,3 +338,23 @@ describe('host.describe', () => {
     await host.close();
   });
 });
+
+describe('agent list fan-out', () => {
+  it('tells watching clients when an agent is created or duplicated', async () => {
+    const host = makeHost();
+    const local = host.createSession('local');
+    const seen: string[] = [];
+    host.on('agent.updated', (payload) => {
+      seen.push(payload.agent.id);
+    });
+
+    const created = (await host.dispatch(local, 'agents.create', { name: 'Scout' })) as { id: string };
+    // A phone watching the list upserts on this event, so without it the new
+    // agent only appears after a manual refresh.
+    expect(seen).toEqual([created.id]);
+
+    const copy = (await host.dispatch(local, 'agents.duplicate', { agentId: created.id })) as { id: string };
+    expect(seen).toEqual([created.id, copy.id]);
+    await host.close();
+  });
+});
