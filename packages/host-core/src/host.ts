@@ -16,6 +16,7 @@ import type {
   Run,
 } from '@guhbot/protocol';
 import { PROTOCOL_VERSION, methods } from '@guhbot/protocol';
+import type { z } from 'zod';
 import { loadOrCreateMasterKey, createSecretBox, hashToken, verifyToken, type SecretBox } from './crypto.js';
 import { createHash } from 'node:crypto';
 import { newId, newPairingCode, newToken, nowIso } from './ids.js';
@@ -120,6 +121,35 @@ export interface HostOptions {
    * rejects the request for length.
    */
   historyLimit?: number;
+  /**
+   * Extra RPC methods contributed by capability packages.
+   *
+   * Capabilities live outside this package so that adding one never means
+   * editing the runtime. Each entry is keyed by the method name it implements
+   * and must also appear in the protocol registry, which is where its input
+   * schema and authorization class are declared. A handler registered for a
+   * name that is not in the registry is ignored, so a typo cannot widen the API.
+   */
+  extraMethods?: Record<string, ContributedMethod>;
+}
+
+/** Signature every RPC handler shares. */
+export type MethodHandler = (host: Host, session: Session, input: never) => Promise<unknown>;
+
+/**
+ * A method contributed by a capability package.
+ *
+ * It carries its own contract rather than only a handler, so the authorization
+ * class and the input schema are declared at the point of definition and cannot
+ * be forgotten. `dispatch` treats core and contributed methods identically.
+ */
+export interface ContributedMethod {
+  authz: AuthzClass;
+  input: z.ZodTypeAny;
+  output: z.ZodTypeAny;
+  summary: string;
+  localOnly?: boolean;
+  handler: MethodHandler;
 }
 
 export interface HostEvents {
@@ -151,6 +181,8 @@ export class Host {
   /** Pairing codes currently outstanding, plaintext kept only in memory. */
   private readonly livePairings = new Map<string, string>();
   private readonly historyLimit: number;
+  /** Every callable method: the static core table plus anything a capability contributed. */
+  private readonly registry: Map<string, ResolvedMethod>;
   private listenAddresses: string[] = [];
   private listenPort = 0;
   private closed = false;
@@ -162,6 +194,7 @@ export class Host {
     this.now = options.now ?? Date.now;
     this.capabilities = options.capabilities ?? {};
     this.historyLimit = options.historyLimit ?? 60;
+    this.registry = buildRegistry(options.extraMethods ?? {});
     this.executor = options.executor;
 
     this.store = new Store({ dataDir: options.dataDir });
@@ -188,6 +221,18 @@ export class Host {
    */
   emitEvent<K extends keyof HostEvents>(event: K, payload: HostEvents[K]): void {
     this.emitter.emit(event, payload);
+  }
+
+  /**
+   * The callable method table, core plus contributed.
+   *
+   * Exposed so `host.describe` reports what this host actually implements — a
+   * client that discovers a method here is guaranteed a handler exists behind it.
+   */
+  describeMethods(): { name: string; authz: AuthzClass; summary: string }[] {
+    return [...this.registry.entries()]
+      .map(([name, entry]) => ({ name, authz: entry.spec.authz, summary: entry.spec.summary }))
+      .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
   }
 
   /** Record the addresses and port the server actually bound, for `host.status`. */
@@ -295,10 +340,11 @@ export class Host {
       throw new HostError('cancelled', 'host is shutting down');
     }
 
-    const spec = (methods as Record<string, (typeof methods)[MethodName] | undefined>)[method];
-    if (!spec) {
+    const entry = this.registry.get(method);
+    if (!entry) {
       throw new HostError('not-found', `unknown method ${method}`);
     }
+    const { spec } = entry;
 
     if (spec.localOnly === true && session.channel !== 'local') {
       throw new HostError('forbidden', `${method} is only available on the host itself`);
@@ -316,13 +362,8 @@ export class Host {
       );
     }
 
-    const handler = this.handlers[method as MethodName];
-    if (!handler) {
-      throw new HostError('internal', `method ${method} is declared but not implemented by this host`);
-    }
-
-    // Handlers are typed per-method; the registry above guarantees the cast is sound.
-    const result = await (handler as (host: Host, session: Session, input: unknown) => Promise<unknown>)(this, session, parsed.data);
+    // Handlers are typed per-method; the registry guarantees the cast is sound.
+    const result = await entry.handler(this, session, parsed.data as never);
 
     const outputCheck = spec.output.safeParse(result);
     if (!outputCheck.success) {
@@ -558,11 +599,34 @@ export class Host {
   // Handlers
   // -------------------------------------------------------------------------
 
-  /** Populated below; `dispatch` requires every declared method to appear here. */
-  private readonly handlers: {
-    [M in MethodName]?: (host: Host, session: Session, input: MethodInput<M>) => Promise<MethodOutput<M>>;
-  } = HANDLERS;
+}
 
+interface ResolvedMethod {
+  spec: { authz: AuthzClass; input: z.ZodTypeAny; output: z.ZodTypeAny; summary: string; localOnly?: boolean };
+  handler: MethodHandler;
+}
+
+/**
+ * Merge the static core table with capability contributions.
+ *
+ * Contributions are checked against the core table for name collisions: a
+ * capability must not be able to silently replace a core method, which would let
+ * a third-party package redefine, say, `approvals.resolve`.
+ */
+function buildRegistry(extra: Record<string, ContributedMethod>): Map<string, ResolvedMethod> {
+  const registry = new Map<string, ResolvedMethod>();
+  for (const [name, spec] of Object.entries(methods)) {
+    const handler = (HANDLERS as Record<string, MethodHandler | undefined>)[name];
+    if (!handler) continue;
+    registry.set(name, { spec, handler });
+  }
+  for (const [name, contributed] of Object.entries(extra)) {
+    if (registry.has(name)) {
+      throw new Error(`capability tried to redefine the core method ${name}`);
+    }
+    registry.set(name, { spec: contributed, handler: contributed.handler });
+  }
+  return registry;
 }
 
 type HandlerTable = {
@@ -579,13 +643,7 @@ type HandlerTable = {
 const HANDLERS: HandlerTable = {
   'host.status': async (host) => host.status(),
 
-  'host.describe': async () => ({
-    methods: Object.entries(methods).map(([name, spec]) => ({
-      name,
-      authz: spec.authz,
-      summary: spec.summary,
-    })),
-  }),
+  'host.describe': async (host) => ({ methods: host.describeMethods() }),
 
   'pairing.begin': async (host) => host.beginPairing(),
 

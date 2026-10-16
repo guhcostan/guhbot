@@ -6,7 +6,16 @@
  * and devices. Everything else is injected.
  */
 export { Host, HostError } from './host.js';
-export type { ChannelKind, HostEvents, HostOptions, RunContext, RunExecutor, Session } from './host.js';
+export type {
+  ChannelKind,
+  ContributedMethod,
+  HostEvents,
+  HostOptions,
+  MethodHandler,
+  RunContext,
+  RunExecutor,
+  Session,
+} from './host.js';
 export { Store } from './store.js';
 export type { StoreOptions } from './store.js';
 export { createSecretBox, hashToken, loadOrCreateMasterKey, verifyToken } from './crypto.js';

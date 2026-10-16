@@ -1986,3 +1986,481 @@ The **probe** mechanism plus these schemas together give a reimplementation a te
 arguments are rejected in the renderer with a named-refinement failure, before any IPC occurs.
 
 ---
+## 5. The `sand:` IPC channel layer
+
+### 5.1 The 21 literal channels
+
+**PROVEN.** String mining for `"sand:<name>"` across all eight beautified bundles yields exactly **21**
+distinct channel literals. `recon/FINDINGS.md` lists the same 21; this section adds the direction,
+the exact send/receive call sites, and the payload shape where the literals reveal it.
+
+| # | Channel | Direction | Renderer side | Main side | Purpose |
+|---|---|---|---|---|---|
+| 1 | `sand:boot-snapshot-sync` | renderer -> main, **synchronous** | `preload.beauty.js:4091` `ipcRenderer.sendSync(...)` | `main-core.beauty.js:19436` `ipcMain.on(...)` sets `t.returnValue` | Returns the boot snapshot (4.2). Synchronous because the preload needs `mainEdge` **before** it builds `desktop.main`. |
+| 2 | `sand:main-edge-served` | main -> renderer | `preload.beauty.js:4094` `ipcRenderer.once(Yt, e)` | `main-core.beauty.js:40512` `webContents.send(hk)` | Releases the RPC gate. Sent by `markMainEdgeServed` (`uJ`). |
+| 3 | `sand:coordinator-port-request` | renderer -> main | `preload.beauty.js:4097` `fi.invoke(...)` via `li({invokeRequest})` | `main-app.beauty.js:85237` `ipcMain.handle(EJe, (r) => {...})` | "Give me the coordinator port." |
+| 4 | `sand:coordinator-port` | main -> renderer, **with MessagePort** | `preload.beauty.js:4146` `ipcRenderer.on("sand:coordinator-port", (e) => gi.deliver(ci(e.ports[0])))` | `main-app.beauty.js:85244` `o.postMessage(bJe, null, [i])` | Delivers the coordinator's **renderer data port**. |
+| 5 | `sand:render-trace-port` | renderer -> main, **with MessagePort** | `preload.beauty.js:4079` `e.postMessage(yi, null, [i.port2])` | `main-core.beauty.js:28247` `e.ipc.on(UF, ...)`, guarded by `senderFrame === mainFrame` | Opens the render-trace stream (4.5). |
+| 6 | `sand:renderer-alive` | renderer -> main | `preload.beauty.js:4129` `ipcRenderer.send(qt, e)` | `main-core.beauty.js:40640` `webContents.ipc.on(ac, ...)`; also `:30806` `r.ipc.on(ac, ...)` | Liveness ping with a sequence number; main records `markInstant("response_end", R)` and `noteRendererAlive()`. |
+| 7 | `sand:renderer-boot-gate-landed` | renderer -> main | `preload.beauty.js:4132` `ipcRenderer.send(Xt)` | `main-core.beauty.js:18341` (constant); the paired listener is registered with the same surface | Boot-gate milestone: the renderer reached its gate. |
+| 8 | `sand:renderer-boot-gate-opened` | renderer -> main | `preload.beauty.js:4135` `ipcRenderer.send(zt, e)` | `main-core.beauty.js:40644` `webContents.ipc.on(Tk, ...)` -> `noteBootGateOpened(R)` | Boot-gate milestone: the gate opened, with a timestamp. Together with #6 and #7 these are the three renderer->main boot telemetry points. |
+| 9 | `sand:network-online` | renderer -> main | `preload.beauty.js:4151` `window.addEventListener("online", () => ipcRenderer.send($t))` | `main-app.beauty.js:74515` `ipcMain.on(AHe, n)` | Browser-reported connectivity change. Note the trigger is the DOM `online` event, so this is *not* a general fetch-failure signal. |
+| 10 | `sand:encode-png` | main -> hidden `WebContentsView`, **with MessagePort** | declared `preload.beauty.js:565` | `main-app.beauty.js:98610` `e.postMessage(ept, i, [o])` | Off-main-thread PNG encoding for clipboard/attachment paths, using the hidden view's renderer. |
+| 11 | `sand:avatar-source` | main -> hidden `WebContentsView` | declared `preload-avatar-source.cjs` (REA node at `preload-avatar-source.cjs:3`, `channel_expression: "w"`) | `main-app.beauty.js:98501` `n.postMessage(zut, i, [c])` | Ask the offscreen view to decode/produce an avatar in one of three result shapes. |
+| 12 | `sand:mouse-history-navigation` | renderer/webview -> main | `preload-vnc.beauty.js:1279` const, `:1481` `e.send(Un, n)`; `preload-webview.beauty.js:107` const | `main-app.beauty.js:68412` `t.ipcMain.on(BAe, (i, a) => {...})` | Mouse back/forward gesture navigation in an embedded browser. |
+| 13 | `sand:browser-origin-return` | webview -> host (`sendToHost`) | `preload-vnc.beauty.js:1470`, `preload-webview.beauty.js:296` `sendToHost("sand:browser-origin-return", { origin, currentUrl })` | consumed by the host webview listener | The embedded browser returned to an origin (used for cookie-origin approval flows). |
+| 14 | `sand:browser-passkey-stalled` | webview -> host | `preload-vnc.beauty.js:1417`, `preload-webview.beauty.js:243` `sendToHost("sand:browser-passkey-stalled", d)` | host listener | A WebAuthn/passkey ceremony inside the embedded browser stalled; triggers the signer path. |
+| 15 | `sand:browser-popup-closed` | webview -> host | `preload-vnc.beauty.js:1460`, `preload-webview.beauty.js:286` `sendToHost("sand:browser-popup-closed", { url: location.href })` | host listener | A popup opened by the embedded browser was closed. |
+| 16 | `sand:vnc-session` | viewer -> host | `preload-vnc.beauty.js:1697` `sendToHost("sand:vnc-session", JSON.stringify({ phase: c, clean: y }))` | host listener | Remote-session lifecycle: an opaque `phase` plus a `clean` boolean. JSON-stringified because `sendToHost` payloads are strings. |
+| 17 | `sand:vnc-accepts-input` | host -> viewer | `preload-vnc.beauty.js:1556` `e.on(_n, (a, s) => { if (typeof s === "boolean") ... })` | host side | Whether the remote page currently accepts input. |
+| 18 | `sand:vnc-interactive` | host -> viewer | `preload-vnc.beauty.js:1553` `e.on(Sn, ...)` | host side | Whether the viewer should behave interactively; combined with #17 before turning input on: `o.turn(n && t)`. |
+| 19 | `sand:vnc-viewer-visible` | host -> viewer | `preload-vnc.beauty.js:1614` and `:1755` `s.on(ke, (I, x) => { y.update(x) && n.isOn() && b(); })` | host side | Viewer visibility. Gates the reporting loop, i.e. a hidden viewer stops sampling. |
+| 20 | `sand:vnc-liveness` | viewer -> host | `preload-vnc.beauty.js:1787` `d.sendToHost(kn, b)` where `b = p.sample(performance.now(), Fn(await u.executeJavaScript(m)))` | host side | A liveness sample: the viewer evaluates a measurement expression in its own frame and reports the sample. |
+| 21 | `sand:vnc-host-key` | viewer -> host | `preload-vnc.beauty.js:1682` `o.sendToHost(bn, d.key)` | host side | Forwards only `ArrowUp`/`ArrowDown`/`ArrowLeft`/`ArrowRight` keydowns from the viewer to the host, and only when the `j()` predicate (input-accepting) holds. |
+
+Grouped by purpose:
+
+| Group | Channels | Notes |
+|---|---|---|
+| Boot and liveness (5) | `boot-snapshot-sync`, `main-edge-served`, `renderer-alive`, `renderer-boot-gate-landed`, `renderer-boot-gate-opened` | The boot handshake between `preload.cjs` and `main-core`. |
+| Coordinator plumbing (2) | `coordinator-port-request`, `coordinator-port` | Grants the renderer a direct MessagePort to the coordinator. |
+| Offscreen work (2) | `encode-png`, `avatar-source` | Main drives a hidden `WebContentsView` renderer. |
+| Render tracing (1) | `render-trace-port` | High-volume stream, deliberately not RPC. |
+| Connectivity (1) | `network-online` | DOM `online` event only. |
+| Embedded-browser events (4) | `mouse-history-navigation`, `browser-origin-return`, `browser-passkey-stalled`, `browser-popup-closed` | Cross the `<webview>` boundary with `sendToHost`. |
+| Remote-session (VNC) control (6) | `vnc-session`, `vnc-accepts-input`, `vnc-interactive`, `vnc-viewer-visible`, `vnc-liveness`, `vnc-host-key` | Host <-> viewer control plane; note the payloads are booleans, strings and a `{phase, clean}` object - not an RPC envelope. |
+
+Channels **not** in the `sand:` namespace but observed on the same wire, listed for completeness:
+
+| Literal | Where | Purpose |
+|---|---|---|
+| `dune:reliability-report` | `preload.beauty.js:74`, sent by `__duneReliability.report` | Node reliability reports |
+| `dune-rpc:<edge>:m:<method>` | derived, `preload.beauty.js:472` | RPC method calls (section 4.6) |
+| `dune-rpc:<edge>:e:<event>` | derived, `preload.beauty.js:475` | RPC event subscriptions |
+| `dune-rpc:<edge>:probe` | derived, `preload.beauty.js:478` | RPC capability probe |
+| `__dune_message_port_message__` | `main-core.beauty.js:38724` region (Sentry) | Sentry renderer-id message port |
+| `coordinator-control`, `coordinator-main-data` | `coordinator.beauty.js:34981`, `:34985` | Fork-IPC envelope channel tags (section 1.4) |
+
+A second RPC edge named `box-vnc` exists but is **not** exposed to a main world
+(`recon/beautified/preload-vnc.beauty.js:688`):
+
+```js
+var Rn = me("box-vnc", { methods: { readClipboard: te().noArgs, writeClipboard: te().args({ text: fe() }) } });
+```
+
+**INFERRED**: it is a sandboxed clipboard bridge for the remote-session viewer, reachable only through the
+webview's own preload transport, which is why it needs no `contextBridge` exposure.
+
+### 5.2 `createKey` in `main-core` is Sentry's IPC namespace, not an app RPC factory
+
+**This corrects a reading in `recon/FINDINGS.md`.** That file lists
+"a key-factory in main-core: `t.createKey(<name>)` with names `start`, `structured-log`, `status`, `scope`, `envelope`"
+under the heading "Literal `sand:` IPC channels", which implies an app-specific channel factory. It is not.
+It is part of `@sentry/electron`'s renderer-to-main IPC layer, defined by the factory
+(`recon/beautified/main-core.beauty.js:37075-37083`):
+
+```js
+function Q5(e) {
+  return {
+    createUrl: (t) => `${e}://${t}/sentry_key`,
+    urlMatches: function (t, n) { return t.startsWith(this.createUrl(n)); },
+    createKey: (t) => `${e}.${t}`,
+    namespace: e,
+  };
+}
+```
+
+`e` is the Sentry `ipcNamespace`, so `createKey("start")` evaluates to `<ipcNamespace>.start`, not
+`sand:start`. The consumer, **PROVEN verbatim** (`main-core.beauty.js:38814-38831`, inside `fDe`):
+
+```js
+function fDe(e, t, n) {
+  (wt.ipcMain.on(t.createKey("start"), ({ sender: o }) => {
+    let a = o.id;
+    ((yr = yr || new Set()),
+      !yr.has(a) && (o.isDestroyed() || (yr.add(a), o.once("destroyed", () => { yr?.delete(a); }))));
+  }),
+    wt.ipcMain.on(t.createKey("scope"), (o, a) => J9(n, a)),
+    wt.ipcMain.on(t.createKey("envelope"), ({ sender: o }, a) => X9(e, n, a, o)),
+    wt.ipcMain.on(t.createKey("structured-log"), ({ sender: o }, a) => Z9(e, n, a, o)));
+  let r = dC(e);
+  r && wt.ipcMain.on(t.createKey("status"), ({ sender: o }, a) => r(a, o));
+}
+function Q9(e, t) {
+  let n = Q5(t.ipcNamespace);
+  ((t.ipcMode & go.Protocol) > 0 && pDe(e, n, t), (t.ipcMode & go.Classic) > 0 && fDe(e, n, t));
+}
+```
+
+with the mode enum `go = { Classic: 1, Protocol: 2, Both: 3 }` (`:37054-37058`) and the protocol variant
+registering the same five verbs as **custom-scheme URLs** `<namespace>://<verb>/sentry_key`
+(`main-core.beauty.js:38795-38806`), matched by `urlMatches`:
+
+```js
+for (let a of n.getSessions())
+  i9(a.protocol, t.namespace, (i) => {
+    ...
+    if (t.urlMatches(i.url, "start")) lDe();
+    else if (t.urlMatches(i.url, "scope") && d) J9(n, d.toString());
+    else if (t.urlMatches(i.url, "envelope") && d) X9(e, n, d, c());
+    else if (t.urlMatches(i.url, "structured-log") && d) Z9(e, n, JSON.parse(d.toString()), c());
+    else if (o && t.urlMatches(i.url, "status") && d) { ... }
+  });
+```
+
+So there are **two** Sentry transports with the same five verbs:
+
+| Mode | Transport | Verb -> channel |
+|---|---|---|
+| `Classic` (1) | `ipcMain.on` | `<namespace>.start`, `<namespace>.scope`, `<namespace>.envelope`, `<namespace>.structured-log`, `<namespace>.status` |
+| `Protocol` (2) | custom protocol sessions | `<namespace>://start/sentry_key`, `://scope/sentry_key`, `://envelope/sentry_key`, `://structured-log/sentry_key`, `://status/sentry_key` |
+| `Both` (3) | both | both |
+
+`main-core` also wraps the registration API so that Sentry's own scheme registration cannot clobber the
+app's (`main-core.beauty.js:38782-38785`):
+
+```js
+(wt.protocol.registerSchemesAsPrivileged([r]),
+  (wt.protocol.registerSchemesAsPrivileged = new Proxy(wt.protocol.registerSchemesAsPrivileged, { ... })))
+```
+
+**INFERRED**: the `Proxy` exists so that Sentry's late registration of its protocol scheme is folded into
+the app's privileged-scheme list rather than replacing it - a real hazard, because
+`registerSchemesAsPrivileged` must be called once, before `app` is ready.
+
+### 5.3 Why most IPC is structured RPC rather than raw channels
+
+REA's IPC summary, **PROVEN** (`recon/rea/js-application.json -> normalized_result.summary.ipc`):
+
+```json
+{"operations": 18, "literal_channels": 5, "dynamic_channel_operations": 13,
+ "renderer_transmissions": 8, "renderer_listeners": 4, "main_handlers": 6,
+ "paired_renderer_transmissions": 0, "ambiguous_renderer_transmissions": 0,
+ "unpaired_literal_renderer_transmissions": 4}
+```
+
+Only **5** channel literals were resolvable at call sites, and **13** operations were dynamic. REA's
+`limitations[1]` states the policy that produced that number:
+
+> "Dynamic IPC channel expressions remain unresolved and are never paired by textual similarity."
+
+That is exactly the right policy, and the reason 13 operations are "dynamic" is now fully explained:
+
+1. **`preload.cjs` is `parse_status: "partial"` in REA** (section 8). Almost the entire preload - including
+   the edge client - is inside a module REA could only partially project, so every call whose channel is a
+   variable (`$t`, `Yt`, `qt`, `Xt`, `zt`, `jt`, `yi`, `Un`) appears as `channel: null,
+   channel_expression: "<minified name>"`. The literal values are all present in the same file
+   (`preload.beauty.js:565-575`, `:4072`) and are enumerated in 5.1.
+2. **The five `t.createKey(...)` operations** are Sentry's namespace-dependent keys (5.2). They are
+   genuinely dynamic and REA was right not to guess.
+3. **The 308-method `main` edge carries no channel literals at all.** Its channels are built by template
+   strings (`dune-rpc:${edge}:m:${method}`). REA sees one call site per method with a computed channel, and
+   per its own policy never pairs them.
+
+**The observed pattern, stated plainly.** `sand:` channels are a small, hand-written, *named* control plane -
+21 literals covering the process lifecycle, port handshakes, offscreen work and cross-boundary events. All
+application functionality rides a *structured RPC* layer on top of plain `ipcRenderer.invoke` with three
+derived channel families, a JSON envelope `{ok, value | failure}`, per-method argument schemas validated in
+the preload, a single-claimant port lease for the coordinator, and a capability probe for distinguishing
+"unknown method" from "transport down".
+
+**INFERRED** on the motivation for the split (no literal states it):
+
+* The named channels are the ones that (a) must be synchronous, (b) must carry transferred
+  `MessagePort`s, or (c) cross the `<webview>` boundary. Neither `invoke`-based RPC nor a single channel can
+  express those, so they are hand-written.
+* Everything else is RPC because the alternative - hundreds of `ipcMain.handle` registrations - would put
+  the whole API surface into the main process bundle's startup cost, would have no schema, and would give no
+  place to put the boot gate. With the edge pattern, the renderer can build its entire client from a data
+  declaration, the gate lives in one place (`pi`), and error taxonomy is uniform.
+* It also makes the surface **auditable**: `preload.beauty.js:3493-3939` is a single contiguous declaration of
+  everything the renderer can ask the main process to do.
+
+---
+## 6. Renderer composition
+
+### 6.1 `dist/renderer/index.html` (PROVEN, read in full)
+
+The document is 1,714 bytes and begins with two stray bytes (see "A note on the shipped bundles"). Its
+complete load graph, in document order:
+
+| Order | Element | Target |
+|---|---|---|
+| 1 | `<script src>` (classic, **before** anything else) | `./assets/dune-render-trace-hook-265eb7be.js` |
+| 2 | `<meta http-equiv="Content-Security-Policy">` | see 3.7 |
+| 3 | `<meta name="viewport" content="width=device-width, initial-scale=1.0">` | |
+| 4 | `<link rel="preload" as="font" type="font/woff2">` | `./assets/cursor-icons-16-gwXtdAvu.woff2` |
+| 5 | `<title>` | `Grok Bot` |
+| 6 | `<script type="module" crossorigin src>` | `./assets/index-wlkGG389.js` |
+| 7 | `<link rel="modulepreload" crossorigin>` | `./assets/index.eager-common-BN38Qy-9.js` |
+| 8 | `<link rel="modulepreload" crossorigin>` | `./assets/index.eager-vendor--EXc1dae.js` |
+| 9 | `<link rel="modulepreload" crossorigin>` | `./assets/index.eager-platform-DKZJbDqM.js` |
+| 10 | `<link rel="modulepreload" crossorigin>` | `./assets/index.eager-app-DSuGVQNC.js` |
+| 11 | `<link rel="stylesheet" crossorigin>` | `./assets/index-DkV65EBE.css` |
+| 12 | inline `<style>` | boot-shell CSS (3.7) |
+| 13 | `<link rel="modulepreload" crossorigin>` | `./assets/chunk-prompt-editor-A2oxbQX4.js` |
+| 14 | `<body>` | `<div id="root"></div><div id="sand-boot-shell" aria-hidden="true"></div>` |
+
+Structural observations, all **PROVEN** from the tag order:
+
+* **The render-trace hook is a classic script, not a module, and it is first.** It therefore executes before
+  the CSP meta tag is parsed and before any module is fetched. `index.html` has no other classic script.
+* **Four "eager" chunks are modulepreloaded** (common, vendor, platform, app), i.e. the shell is split along
+  a four-way axis the build calls *eager* - loaded up front rather than on demand.
+* **`chunk-prompt-editor` is modulepreloaded last**, after the stylesheet. It is not one of the eager four,
+  but it is preloaded, which means the prompt editor is on the critical path for first interaction.
+* The CSS is a **single** stylesheet for the shell (`index-DkV65EBE.css`); the remaining three `.css` files
+  in `assets/` belong to lazily loaded chunks (one is `desktop-mount-panel-BkVLoJ0_.css`, used by the panel
+  document).
+* `crossorigin` on the module and stylesheet links is required for Vite's module-preload pattern and is
+  consistent with loading over a custom or `file` scheme with `webSecurity: true`.
+
+The panel document (`dist/renderer/src/electron-renderer/desktop-mount/panel/panel.html`, 3,104 bytes) has
+the same shape with a different module graph: the hook script, its own (weaker) CSP, `<title>Sand</title>`,
+`<script type="module" src="../../../../assets/desktop-mount-panel-BOOo14LZ.js">`, a modulepreload of
+`index.eager-common`, the panel stylesheet, and a modulepreload of `chunk-prompt-editor`. Its body is a
+hand-written shell, not a React mount point:
+
+| Element | Purpose |
+|---|---|
+| `<main id="panel" hidden>` | root, hidden until the preload reveals it |
+| `<button id="mount-trigger" aria-expanded="false" aria-controls="composer" aria-label="Open composer">` + `<img id="mark">` | the desktop bot mark / launcher |
+| `<div id="bot-menu" role="menu" aria-label="Switch bot" hidden>` with `#bot-menu-pinned` | the bot switcher, containing `#unmount-item` labelled `Unmount from Desktop` |
+| `<template id="bot-menu-item">` | per-bot menu item template with `role="menuitemradio"`, `aria-checked`, a `bot-menu-mark` `<img>` and a `bot-menu-check` SVG |
+| `<form id="composer" inert>` with `<textarea id="prompt" rows="1" dir="auto" autocomplete="off" spellcheck="true">` and `<button id="send" type="submit" aria-label="Send">` | the inline composer |
+
+The `inert` attribute on `#composer` and `hidden` on `#panel` and `#bot-menu` are the mechanism by which the
+panel is revealed only after `desktopMount.read` / `readLayout` have answered. The `Unmount from Desktop`
+string is UI text that maps 1:1 onto the `desktopMount.unmount` method (4.3).
+
+### 6.2 Chunk inventory
+
+**PROVEN.** `ls dist/renderer/assets/ | wc -l` gives **588** entries, totalling 32 MiB. Extension census:
+
+| Extension | Count | Notes |
+|---|---|---|
+| `.js` | **534** | code chunks |
+| `.woff2` | 22 | icon fonts, including `cursor-icons-16-gwXtdAvu.woff2` from the preload link |
+| `.png` | 14 | |
+| `.svg` | 6 | |
+| `.wav` | 5 | notification/sound assets |
+| `.css` | 4 | shell + lazily loaded chunk styles |
+| `.mp3` | 1 | |
+| `.mjs` | 1 | `pdf.worker.min-qwK7q_zL.mjs` |
+| `.jpg` | 1 | |
+| **`.map`** | **0** | no source maps anywhere in the payload |
+
+Of the 534 `.js` files, **275 distinct base names** remain after stripping the trailing `-<hash>.js`
+(8 base64url characters). The nine names that repeat are chunk *families*; because their sizes and Sentry
+debug ids all differ, they are genuinely distinct chunks that share a group name, i.e. the bundler names
+chunks `chunk-<group>-<hash>.js` where `<group>` is a source-tree grouping:
+
+| Base name | Files | Reading |
+|---|---|---|
+| `chunk-view` | 62 | view-layer chunks |
+| `chunk-agents` | 35 | agent feature area |
+| `chunk-chat` | 35 | chat feature area |
+| `chunk-core` | 35 | core/shared runtime |
+| `chunk-settings` | 35 | settings feature area |
+| `chunk-shared` | 35 | shared components |
+| `chunk-messages` | 23 | message list/rendering |
+| `chunk-index` | 6 | route entry segments |
+| `chunk-layout` | 2 | app shell layout |
+
+62 + 35*5 + 23 + 6 + 2 = **268** grouped chunks, plus **266** singleton chunks = 534.
+
+The singleton names (the remaining 266) fall into recognisable families. The most informative ~100, grouped.
+Every name below is a literal filename stem from `ls`; the group labels are **INFERRED** from the names.
+
+**Language grammars for the syntax highlighter / code viewer (about 80 names)**: `chunk-abnfDiagram-VRR7QNED`,
+`chunk-asm`, `chunk-astro`, `chunk-c`, `chunk-clojure`, `chunk-cmake`, `chunk-cpp`, `chunk-crystal`,
+`chunk-csharp`, `chunk-css`, `chunk-dart`, `chunk-dockerfile`, `chunk-dotenv`, `chunk-elixir`, `chunk-elm`,
+`chunk-erb`, `chunk-erlang`, `chunk-fish`, `chunk-fsharp`, `chunk-glsl`, `chunk-go`, `chunk-graphql`,
+`chunk-groovy`, `chunk-haml`, `chunk-haskell`, `chunk-hcl`, `chunk-hlsl`, `chunk-html`,
+`chunk-html-derivative`, `chunk-ini`, `chunk-java`, `chunk-javascript`, `chunk-json`, `chunk-json5`,
+`chunk-jsonc`, `chunk-jsx`, `chunk-julia`, `chunk-kotlin`, `chunk-latex`, `chunk-less`, `chunk-lisp`,
+`chunk-lua`, `chunk-makefile`, `chunk-markdown`, `chunk-mdx`, `chunk-nginx`, `chunk-nim`, `chunk-objective-c`,
+`chunk-objective-cpp`, `chunk-ocaml`, `chunk-perl`, `chunk-php`, `chunk-postcss`, `chunk-powershell`,
+`chunk-prisma`, `chunk-python`, `chunk-r`, `chunk-regexp`, `chunk-rst`, `chunk-ruby`, `chunk-rust`,
+`chunk-sass`, `chunk-scala`, `chunk-scss`, `chunk-shellscript`, `chunk-sql`, `chunk-svelte`, `chunk-swift`,
+`chunk-terraform`, `chunk-toml`, `chunk-tsx`, `chunk-typescript`, `chunk-vue`, `chunk-xml`, `chunk-yaml`,
+`chunk-zig`. This is a Shiki-style embedded-grammar set: `chunk-shiki-token-cache` and
+`chunk-DefaultCode` co-occur, and `chunk-wipe-navigation`, `chunk-code-body`, `chunk-fullscreen-file-viewer-body`
+and `chunk-file-stage` are its consumers.
+
+**Mermaid diagram renderers (about 40 names)**: `chunk-mermaid.core`, `chunk-dagre-VKFMJZFB`,
+`chunk-cose-bilkent-JH36ORCC`, plus per-diagram chunks `chunk-arc`, `chunk-architectureDiagram-ZJ3FMSHR`,
+`chunk-blockDiagram-677ZJIJ3`, `chunk-c4Diagram-LMCZKHZV`, `chunk-classDiagram-OUVF2IWQ`,
+`chunk-classDiagram-v2-EOCWNBFH`, `chunk-cynefin-VYW2F7L2`, `chunk-cynefinDiagram-TSTJHNR4`,
+`chunk-diagram-FQU43EPY`, `chunk-diagram-G47NLZAW`, `chunk-diagram-NH7WQ7WH`, `chunk-diagram-OA4YK3LP`,
+`chunk-diagram-WEI45ONY`, `chunk-ebnfDiagram-CCIWWBDH`, `chunk-erDiagram-Q63AITRT`,
+`chunk-flowDiagram-23GEKE2U`, `chunk-ganttDiagram-NO4QXBWP`, `chunk-gitGraphDiagram-IHSO6WYX`,
+`chunk-infoDiagram-FWYZ7A6U`, `chunk-ishikawaDiagram-FXEZZL3T`, `chunk-journeyDiagram-5HDEW3XC`,
+`chunk-kanban-definition-HUTT4EX6`, `chunk-mindmap-definition-LN4V7U3C`, `chunk-pegDiagram-2B236MQR`,
+`chunk-pieDiagram-ENE6RG2P`, `chunk-quadrantDiagram-ABIIQ3AL`, `chunk-railroadDiagram-RFXS5EU6`,
+`chunk-requirementDiagram-TGXJPOKE`, `chunk-sankeyDiagram-HTMAVEWB`, `chunk-sequenceDiagram-DBY2YBRQ`,
+`chunk-stateDiagram-2N3HPSRC`, `chunk-stateDiagram-v2-6OUMAXLB`, `chunk-swimlanes-5IMT3BWC`,
+`chunk-swimlanesDiagram-G3AALYLV`, `chunk-timeline-definition-FHXFAJF6`, `chunk-vennDiagram-L72KCM5P`,
+`chunk-wardleyDiagram-EHGQE667`, `chunk-xychartDiagram-FW5EYKEG`.
+
+**Rich text, math and tables**: `chunk-prompt-editor` (also modulepreloaded), `chunk-markdown`,
+`chunk-markdown-structure`, `chunk-markdown-math`, `chunk-markdown-math-katex`, `chunk-katex`,
+`chunk-markdown-table-card`, `chunk-transcript-markdown`, `chunk-iamcal`, `chunk-emojibase`,
+`chunk-emoji-messages.<locale>` for 13 locales (`af`, `ar`, `cs`, `el`, `ha`, `he`, `id`, `mr`, `sw`, `ta`,
+`te`, `tr`, `ur`), `chunk-defaultLocale`, `chunk-file-markdown`, `chunk-file-markdown-hast`,
+`chunk-file-markdown.worker`.
+
+**Document and media viewers**: `chunk-pdf` (with `pdf.worker.min-qwK7q_zL.mjs`), `chunk-xlsx`,
+`chunk-document-page`, `chunk-fullscreen-file-viewer-body`, `chunk-file-stage`, `chunk-get-file-icon`,
+`chunk-diff`, `chunk-code-body`, `chunk-table-loader`, `chunk-widget`, `chunk-voice-memo-bubble`,
+`chunk-computer-screen-preview`, `chunk-scale-layer`.
+
+**Charts and graphs**: `chunk-cytoscape.esm-CY9iOoO4`, `chunk-graph`, `chunk-map`, `chunk-linear`,
+`chunk-transcript-markdown`.
+
+**Team-bot and agent administration**: `chunk-team-bot-overview-panel`, `chunk-team-bot-overview-section`,
+`chunk-team-bot-details-pane`, `chunk-team-bot-details-dialog`, `chunk-team-bot-details-rows`,
+`chunk-team-bot-context-dialog`, `chunk-team-bot-custom-plugins`, `chunk-team-bot-plugins-dialog-list`,
+`chunk-team-bot-service-accounts`, `chunk-team-bot-service-accounts-dialog`,
+`chunk-team-bot-service-accounts-shown`, `chunk-team-bot-service-account-tiles`,
+`chunk-team-bot-carry-over-plugin-selection`, `chunk-team-bot-line-render`,
+`chunk-team-bot-teammate-intro`, `chunk-team-bot-setup-grid`, `chunk-team-agent-rows`,
+`chunk-team-setup-row`, `chunk-team-setup-pills`, `chunk-team-setup-new-skill-dialog`,
+`chunk-team-setup-new-secret-dialog`, `chunk-use-team-bot-access`, `chunk-provider-team-policy`,
+`chunk-agent-avatar-editor`.
+
+**Grok Bot (product) surfaces**: `chunk-grok-bot-secrets`, `chunk-grok-bot-secret-problem-text`,
+`chunk-grok-bot-slack-dialog-live`, `chunk-grok-bot-team-custom-mcp`, `chunk-grok-bot-team-pane-chrome`,
+`chunk-native-plugin-state`, `chunk-native-plugin-detail`, `chunk-native-connector-card`,
+`chunk-plugin-detail-view`, `chunk-plugins-rows`, `chunk-listener-integrations`,
+`chunk-provider-listener-integrations`, `chunk-provider-credentials`, `chunk-provider-computer-use`,
+`chunk-provider-local-tool-permission`, `chunk-marketplace-browse-model`,
+`chunk-bot-template-details-dialog`, `chunk-bot-template-details-focus`,
+`chunk-bot-template-share-card-frame`, `chunk-template-editor-dialog`, `chunk-finance`,
+`chunk-top-up-modal-host`, `chunk-cloud-agent-card-elevated`, `chunk-cloud-agent-artifact-open-telemetry`,
+`chunk-box-desktop-modal`, `chunk-automation-detail-panel`, `chunk-teach-recording-controls`,
+`chunk-connector-auth-telemetry`.
+
+**Approvals, review and navigation**: `chunk-auto-review-approval`, `chunk-auto-review-rule-notice`,
+`chunk-auto-review-selector`, `chunk-sand-auto-review-instructions`, `chunk-approval-mode-switcher`,
+`chunk-new-chat-bar`, `chunk-list-item`, `chunk-list`, `chunk-card-dialog`, `chunk-card-item`,
+`chunk-settings-row`, `chunk-scroll-pane`, `chunk-thread-card`, `chunk-session`, `chunk-draft-composer-bubble`,
+`chunk-draft-send-error`, `chunk-settled-message-card`, `chunk-group-chat-connect-waiting`,
+`chunk-onboarding-flow`, `chunk-init`, `chunk-connect`, `chunk-compact`, `chunk-interaction-scope`,
+`chunk-network-debugger-dialog`, `chunk-channel`, `chunk-interface`/`chunk-ordinal`/`chunk-layout`.
+
+**Framework and vendor singletons**: `chunk-react`, `chunk-sentry-sdk`, `chunk-proto`,
+`chunk-cytoscape.esm`, plus the four `index.eager-*` bundles and `dune-render-trace-hook`,
+`desktop-mount-panel`.
+
+**Micro-component / hook chunks** (evidence of aggressive per-module code splitting):
+`chunk-SegmentedControl`, `chunk-ToggleIconButton`, `chunk-use-active-option-scroll`,
+`chunk-use-clamp-overflow`, `chunk-use-draft-revision-highlight`, `chunk-sizeCapture-X5ZJPWSS`,
+`chunk-list-item`, `chunk-settings-row`, `chunk-scale-layer`, `chunk-scroll-pane`.
+
+**INFERRED** on what this tells a reimplementation:
+
+1. The renderer is **route-and-feature code-split**, not one bundle, and the split is fine-grained enough to
+   produce per-component and per-hook chunks. A reimplementation that ships one bundle will have a
+   materially different startup profile.
+2. There are **three distinct heavy subsystem sets** that dominate the chunk count: syntax grammars
+   (~80), mermaid diagram types (~40), and the team-bot administration UI (~25). These are the areas where
+   bundle discipline matters most.
+3. `chunk-prompt-editor` being modulepreloaded alongside the eager four makes the **prompt composer** a
+   first-class critical-path component, which matches the `desktopMount.submitPrompt` /
+   `signalBoxIntent({intent: "composer_focus" | "upload_start" | "file_open"})` surface
+   (`preload.beauty.js:3522`).
+
+### 6.3 `dist/renderer/src/`
+
+**PROVEN.** The directory contains **exactly one file**:
+
+```
+dist/renderer/src/electron-renderer/desktop-mount/panel/panel.html   3,104 bytes
+```
+
+`find dist/renderer/src -type f` returns that single path and nothing else. There is no `src/` source tree in
+the payload, no `.ts`/`.tsx`, and no test fixtures. REA records it as an `electron-renderer` node with
+`mechanism: "html-script-entrypoint"` and `resolution_status: "resolved"`
+(`recon/rea/js-application.json -> graph.nodes[kind=electron-renderer]`), which confirms it is reachable as a
+document entrypoint rather than being a stray file.
+
+**INFERRED**: the directory name `src/electron-renderer/...` is the *build output path mirroring the source
+tree*, so this file is a non-bundled static asset that Vite copied verbatim while preserving its source
+location. Everything else the renderer loads goes through `assets/`.
+
+---
+## 7. Native dependencies
+
+### 7.1 The four `.node` addons
+
+**PROVEN.** `dist/deps/runtime-deps-manifest.json` declares them, and REA corroborates each path, byte size,
+and inventory artifact id.
+
+```json
+{ "platform": "darwin", "arch": "arm64",
+  "required": ["cursor-proclist", "sand-notification-settings", "tree-sitter", "tree-sitter-bash"],
+  "copied": ["cursor-proclist","node-addon-api","node-gyp-build","sand-notification-settings",
+             "tree-sitter","tree-sitter-bash","web-tree-sitter"],
+  "nodeFiles": ["cursor-proclist/build/Release/cursor_proclist.node",
+                "sand-notification-settings/build/Release/sand_notification_settings.node",
+                "tree-sitter-bash/prebuilds/darwin-arm64/tree-sitter-bash.node",
+                "tree-sitter/build/Release/tree_sitter_runtime_binding.node"] }
+```
+
+| # | Addon file | Bytes | npm package + version | Purpose | Evidence |
+|---|---|---|---|---|---|
+| 1 | `deps/cursor-proclist/build/Release/cursor_proclist.node` | 102,816 | `cursor-proclist` `1.0.0`, `"file:../vscode/native-modules/cursor-proclist"` | Enumerate OS processes. Used by the exec daemon's supervision, and by the `local tool permission` / computer-use allowed-app surfaces. | REA `native-addon` node; `main-core.beauty.js:29919-29937` reads `/proc/<pid>` and shells out to `ps` only as a fallback |
+| 2 | `deps/sand-notification-settings/build/Release/sand_notification_settings.node` | 101,472 | `sand-notification-settings` `1.0.0`, `"file:native/notification-settings"` | Read/write macOS notification settings for the app bundle, backing `getDesktopNotificationPreferences` / `setDesktopNotificationPreferences` | REA `native-addon`; `native-export` node records `require("./build/Release/sand_notification_settings.node")` with `namespace_access: true` |
+| 3 | `deps/tree-sitter/build/Release/tree_sitter_runtime_binding.node` | 455,760 | `tree-sitter` `0.21.1` | Tree-sitter runtime binding | REA `native-addon`; entrypoint `deps/tree-sitter/index.js` |
+| 4 | `deps/tree-sitter-bash/prebuilds/darwin-arm64/tree-sitter-bash.node` | 1,500,928 | `tree-sitter-bash` `0.21.0`, main `bindings/node` | Bash grammar, used to parse shell commands before policy decision in the exec daemon | REA `native-addon`; entrypoint `deps/tree-sitter-bash/bindings/node/index.js` |
+
+Support packages that ship alongside but are not native themselves: `node-gyp-build` `4.8.4` (loader for
+prebuilt binaries), `node-addon-api` `8.5.0` (C++ header-only API used to compile addons 1 and 2), and
+`web-tree-sitter` `0.21.0` (WASM build, `tree-sitter.js` + `tree-sitter.wasm`), which is the variant a
+renderer or sandboxed context would use.
+
+**PROVEN** on REA's coverage of these: `summary.native_addon_bindings: 2` and
+`summary.resolved_native_addon_bindings: 2`. REA found only **2** of the 4 addons as *bindings* (the two
+loaded through a plain `require` in a `package.json`-resolved entrypoint), while all **4** appear as
+`native-addon` inventory nodes. The other two (`tree-sitter`, `tree-sitter-bash`) are reached through
+`node-gyp-build`, whose resolution is dynamic. REA's `limitations[6]` is explicit that this is not
+verification:
+
+> "Native member names are requested by JavaScript syntax and are not verified binary exports in this workflow."
+
+Both `native-export` nodes record `namespace_access: true`, `requested_members: []`,
+`native_export_verification: "not-performed"`, meaning the JS side imports the whole binding as a namespace
+object and the exported symbol names were **not** verified. Treating this as UNKNOWN is the honest position.
+
+### 7.2 The two unpacked helpers and the helper app
+
+Already inventoried in 1.3; summarised here because the deployment shape matters.
+
+| Item | Path | Unpacked? | Why unpacked |
+|---|---|---|---|
+| 1Password launcher | `app.asar.unpacked/dist/native/sand-op-launcher` | **yes** | It is a Mach-O executable and must be spawned by the OS; files inside an asar are not executable paths. |
+| WebAuthn signer | `app.asar.unpacked/dist/native/sand-webauthn-signer` | **yes** | Same reason; also it needs its own code-signing identity for the platform authenticator flow. |
+| 1Password connection service | `app.asar.unpacked/dist/electron-main/onepassword-connection-service.cjs` | **yes** | **PROVEN** from the `.unpacked` listing. It is a `.cjs` module, so unpacking is not required for executability. **INFERRED**: it is unpacked because it is loaded with a runtime `import()` of a path that must be a real file (a `file://` URL inside an asar is not directly importable by the ESM loader), which matches `main-app.beauty.js:101728`. |
+| All four `.node` addons and their support packages | `app.asar.unpacked/dist/deps/...` | **yes** | Native addons cannot be `dlopen`ed from inside an asar. |
+| Computer Use helper app | `Contents/Helpers/Grok Bot Computer Use.app` | n/a (outside the asar) | A separate signed app bundle so it can hold its own TCC grants (Accessibility, Screen Recording, AppleEvents, Contacts) independently of the main app. |
+
+**PROVEN** significance: the unpacked set is exactly `deps/` + `electron-main/onepassword-connection-service.cjs`
++ `native/`. Everything else (`main.cjs`, `main-core.cjs`, `main-app.cjs`, `proto.cjs`, all preloads, all
+renderer assets, `chrome-import-worker.cjs`) lives **inside** the asar and is therefore subject to the
+`ElectronAsarIntegrity` SHA-256 pin from 1.2.
+
+**INFERRED**: that split is the security boundary. Code inside the asar is integrity-checked at startup;
+code that *must* live outside it (native addons, signer, launcher) is instead protected by the app bundle's
+code signature and, for the two executables, by the OS. The two `.cjs` exceptions are the interesting cases:
+`preload*.cjs` are deliberately **inside** the asar so they get the integrity check, while
+`onepassword-connection-service.cjs` is deliberately **outside** so it can be dynamically imported.
+
+### 7.3 The WASM dependency
+
+`deps/web-tree-sitter/tree-sitter.wasm` ships unpacked. **PROVEN** as a file; **UNKNOWN** as a consumer:
+the renderer's CSP has no `'wasm-unsafe-eval'` in `script-src 'self'` (3.7), so this WASM cannot be
+instantiated from the renderer document under the shipped policy. **INFERRED**: it is loaded either by the
+main process or by the exec daemon, both of which are outside CSP.
+
+---

@@ -26,4 +26,6 @@ export type {
 } from './types.js';
 
 export { builtinTools, resolveInside } from './tools/builtin.js';
+export { assertCapability, collectContributions } from './capability.js';
+export type { Capability } from './capability.js';
 export type { BuiltinToolOptions } from './tools/builtin.js';
