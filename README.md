@@ -157,11 +157,22 @@ In progress: browser automation, MCP, and the mobile client.
 
 Not started: voice, remote desktop, the hosted multi-tenant service.
 
-Honest caveats: the agent loop has been verified against a scripted provider and
-a real SSE server, but **not yet against a live model API**, because no
-credentials were available in the environment where it was built. The desktop app
-typechecks and its host bootstrap is tested; its window has not been launched in
-a GUI session. See `docs/architecture.md` for the full status.
+Honest caveats: the agent loop is verified against a scripted provider, against
+a real SSE server, and against a **live model** (`deepseek-v4.1-flash`), where it
+called a tool to read a file, wrote a file through an approved tool call, and was
+refused when it tried to read `/etc/passwd`. The desktop app typechecks and its
+host bootstrap is tested; its window has not been launched in a GUI session. See
+`docs/architecture.md` for the full status.
+
+The live test skips itself unless credentials are present:
+
+```bash
+# either
+GUHBOT_TEST_BASE_URL=... GUHBOT_TEST_API_KEY=... GUHBOT_TEST_MODEL=... \
+  pnpm vitest run packages/server/tests/live-model.test.ts
+# or, with an authenticated opencode installation, just
+pnpm vitest run packages/server/tests/live-model.test.ts
+```
 
 ## Licence
 

@@ -56,9 +56,24 @@ the application you are licensed to inspect.
 
 **The desktop app is a host, and the phone is a client of it.**
 
-The bundle ships `dist/node-agent-coordinator/main.cjs`, an agent-runtime RPC
-server. The renderer learns its port over IPC
-(`sand:coordinator-port-request` → `sand:coordinator-port`) and then talks to it.
+The bundle ships `dist/node-agent-coordinator/main.cjs`, which exposes an
+agent-runtime RPC surface of 172 methods. It is a `utilityProcess` talking to the
+renderer over **MessagePort**, not a socket: three `MessageChannelMain` ports are
+transferred in one bootstrap message, and the renderer claims its port through
+`sand:coordinator-port-request` → `webContents.postMessage("sand:coordinator-port", null, [port])`.
+The bundle contains no `createServer`, no `listen(`, and no `net` or WebSocket
+server. An earlier revision of this document described a loopback port; that was
+wrong and is corrected here.
+
+> **On the two authorization classes.** In the reference product, `person` /
+> `background` is *box-wake authority*: "may this call be the reason the machine
+> wakes?" A `background` call is refused while the box is parked; a `person` call
+> wakes it. It is not authentication. This project reuses the same two names for a
+> different property — whether a device may act without a human present — because
+> that is the property a self-hosted host reachable from a phone actually needs.
+> The classifications agree in practice (no `background` method in the reference
+> creates, deletes, sends, pays, installs or publishes), but the mechanism is a
+> deliberate divergence and should not be read as a reproduction.
 
 The coordinator exposes **172 methods**, and every one of them is tagged with an
 authorization class:

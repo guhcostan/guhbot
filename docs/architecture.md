@@ -260,8 +260,8 @@ itself to `person`.
 | Pairing and device lifecycle | Done | Single-use, rate-limited, hash-only storage, downgrade test |
 | Transcript sequence and resync | Done | Contiguity, gap-free `afterSeq`, concurrency test |
 | Secret sealing | Done | Ciphertext-on-disk and no-value-on-wire tests |
-| Agent loop, tool calling, approvals | Done | 24 tests with a scripted provider |
-| OpenAI-compatible adapter | Done | 16 tests against a real SSE server |
+| Agent loop, tool calling, approvals | Done | 24 scripted-provider tests, plus 4 against a live model |
+| OpenAI-compatible adapter | Done | 16 tests against a real SSE server, plus live traffic |
 | WebSocket transport, event fan-out | Done | 9 end-to-end tests over a real socket |
 | Built-in tools (fs, command, fetch) | Done | Path-jail, symlink, deny-list, no-shell tests |
 | Desktop shell | Code complete | Bootstrap tested; GUI not launched in this environment |
@@ -276,10 +276,12 @@ itself to `person`.
 
 ### Known gaps
 
-- **No live model has been called.** The loop is verified against a scripted
-  provider, and the adapter against a real SSE server, but no credential was
-  available to run a real completion. This is the first thing to verify with a
-  key.
+- ~~No live model has been called.~~ **Closed.** `packages/server/tests/live-model.test.ts`
+  runs the whole stack against a real OpenAI-compatible model
+  (`deepseek-v4.1-flash` via `opencode-go`): a plain question, a filesystem read
+  answered through a `read_file` tool call, a file written to disk through an
+  approved `write_file`, and an attempt to read `/etc/passwd` refused by the jail.
+  It skips itself when no credentials are present, so CI stays hermetic.
 - **The desktop window has not been launched.** Typecheck passes and the host
   bootstrap is tested; the Electron GUI itself is unverified here.
 - Tool approval is all-or-nothing: a tool either always needs a human or never

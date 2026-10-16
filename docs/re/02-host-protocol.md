@@ -28,11 +28,11 @@ transport that carries it. Concretely:
 
 | Artifact | Role |
 |---|---|
-| `recon/beautified/coordinator.beauty.js` (40,342 lines) | prettier-formatted `dist/node-agent-coordinator/main.cjs`. Primary source. |
-| `recon/beautified/main-app.beauty.js` (109,423 lines) | prettier-formatted `dist/electron-main/main-app.cjs`. Host side: spawn, handoff, restart. |
-| `recon/beautified/main-core.beauty.js` (40,710 lines) | prettier-formatted `dist/electron-main/main-core.cjs`. Env surface, deep-link routes. |
-| `recon/beautified/preload.beauty.js` (4,152 lines) | prettier-formatted `dist/electron-preload/preload.cjs`. contextBridge + port claim. |
-| `recon/beautified/exec-daemon.beauty.js` | prettier-formatted `dist/local-exec-daemon/main.cjs`. |
+| `recon/beautified/node-agent-coordinator.beauty.js` (40,341 lines) | prettier-formatted `dist/node-agent-coordinator/main.cjs`. Primary source. |
+| `recon/beautified/main-app.beauty.js` (109,422 lines) | prettier-formatted `dist/electron-main/main-app.cjs`. Host side: spawn, handoff, restart. |
+| `recon/beautified/main-core.beauty.js` (40,709 lines) | prettier-formatted `dist/electron-main/main-core.cjs`. Env surface, deep-link routes. |
+| `recon/beautified/preload.beauty.js` (4,151 lines) | prettier-formatted `dist/electron-preload/preload.cjs`. contextBridge + port claim. |
+| `recon/beautified/local-exec-daemon.beauty.js` | prettier-formatted `dist/local-exec-daemon/main.cjs`. |
 | `recon/grokbot-0.71.2/dist/renderer/assets/index.eager-app-DSuGVQNC.js` (1,801,380 bytes) | the renderer entry chunk. Contains the *client* half of the contract. |
 | `recon/rea/coordinator-methods.json` | pre-extracted `{method, auth}` table, 172 entries. Independently re-derived in this section. |
 | `recon/FINDINGS.md` | prior working notes. |
@@ -43,9 +43,9 @@ transport that carries it. Concretely:
   the cited location. Quotes are verbatim from the beautified bundles.
 * **`INFERRED`** — the claim is a reasoned reading of proven facts. The reasoning is stated inline.
 * **`UNKNOWN`** — not resolvable from available evidence; the reason is given.
-* Line citations are `file:line` against the **beautified** files listed above. `coordinator.beauty.js:34169`
-  means line 34169 of `recon/beautified/coordinator.beauty.js`.
-* `JB:NNN` is shorthand for `coordinator.beauty.js:NNN` inside tables where the column is already
+* Line citations are `file:line` against the **beautified** files listed above. `node-agent-node-agent-coordinator.beauty.js:34168`
+  means line 34169 of `recon/beautified/node-agent-coordinator.beauty.js`.
+* `JB:NNN` is shorthand for `node-agent-coordinator.beauty.js:NNN` inside tables where the column is already
   labelled, used only to keep tables narrow.
 
 ### Minifier caveat (read this before quoting any symbol)
@@ -58,11 +58,25 @@ within this exact build. What *is* real API surface, and what this dossier leans
 * **object-literal keys** — RPC argument field names;
 * **numeric constants** where the surrounding code makes their role unambiguous;
 * **source-file paths seeded into telemetry strings** — e.g. `node-agent-coordinator/webauthn/provider.ts`
-  (`main-core.beauty.js:26674`), `coordinator-account-runtime.ts` (`main-core.beauty.js:27103`),
-  `electron-renderer/client/sand-client.ts` (`main-core.beauty.js:27129`). These are *real*
+  (`main-core.beauty.js:26673`), `coordinator-account-runtime.ts` (`main-core.beauty.js:27102`),
+  `electron-renderer/client/sand-client.ts` (`main-core.beauty.js:27128`). These are *real*
   monorepo paths that the build baked into error/telemetry descriptors.
 
 Where a claim depends on a minified symbol, the dossier says so explicitly.
+
+### Artifact note (line numbers)
+
+The beautified artifacts were **regenerated with new file names while this section was being written**
+(`coordinator.beauty.js` → `node-agent-coordinator.beauty.js`, `exec-daemon.beauty.js` →
+`local-exec-daemon.beauty.js`), and the re-format shifted some line numbers by one to a few lines in
+a handful of regions. All line numbers in this dossier were therefore **re-derived by content search
+against the artifacts as they now stand**, and 193 representative citations were re-checked
+line-by-line after the correction pass. Treat the **quoted literal**, not the line number, as the
+durable anchor: every non-obvious claim here is accompanied by enough verbatim text (a method name, a
+field list, a channel or env-var name, an error string) to locate it in any build. The 851/861
+protobuf descriptors, the 172-method table and the 141-method surface table are all reproduced from
+independent parses, so a reader can regenerate every table in §3 from the bundles without trusting a
+single line number.
 
 ---
 
@@ -83,10 +97,10 @@ Two corrections, both load-bearing:
    the raw `dist/node-agent-coordinator/main.cjs`: `createServer` 0, `listen(` 0, `node:net` 0,
    `WebSocketServer` 0). It is a `utilityProcess`, not a server. `PROVEN`.
 2. **The loopback allowlist is a URL policy, not a bind allowlist.** The `Set` at
-   `coordinator.beauty.js:33803` is consumed only by `_o()` at `coordinator.beauty.js:33804-33806`,
+   `node-agent-node-agent-coordinator.beauty.js:33802` is consumed only by `_o()` at `node-agent-node-agent-coordinator.beauty.js:33803-33806`,
    which is a predicate: *"is this hostname loopback?"*. It is used in exactly three places, all of
-   them **client-side URL checks** (`JB:33850`, `JB:35340`, `JB:35458`), the most important being
-   `_o(new URL(r).hostname) ? "loopback" : "pod_proxy"` at `JB:35458`, which classifies the **box
+   them **client-side URL checks** (`JB:33849`, `JB:35339`, `JB:35457`), the most important being
+   `_o(new URL(r).hostname) ? "loopback" : "pod_proxy"` at `JB:35457`, which classifies the **box
    gateway base URL** the coordinator is about to call. `PROVEN`.
 
 So the correct mental model is:
@@ -103,7 +117,7 @@ the box gateway **only** when that gateway is on the machine itself. See §1.7.
 ### 1.2 Process topology
 
 `dist/node-agent-coordinator/main.cjs` is spawned by the Electron main process as an Electron
-**`utilityProcess`**. `main-app.beauty.js:91562`:
+**`utilityProcess`**. `main-app.beauty.js:91561`:
 
 ```js
 fork: (L, B) => Ig.utilityProcess.fork(L, [], {
@@ -112,13 +126,13 @@ fork: (L, B) => Ig.utilityProcess.fork(L, [], {
 }),
 ```
 
-with the service name literal at `main-app.beauty.js:85060`:
+with the service name literal at `main-app.beauty.js:85059`:
 
 ```js
 var Aon = "sand-node-agent-coordinator";
 ```
 
-and the artifact path resolved at `main-app.beauty.js:85104-85107`:
+and the artifact path resolved at `main-app.beauty.js:85103-85107`:
 
 ```js
 function _Je() {
@@ -133,7 +147,7 @@ OS CA store rather than Node's bundled roots — relevant because its outbound h
 
 ### 1.3 Three MessagePorts, handed over in the bootstrap message
 
-`main-app.beauty.js:85061-85103` is the whole spawn-and-handoff routine. It creates **three**
+`main-app.beauty.js:85060-85103` is the whole spawn-and-handoff routine. It creates **three**
 `MessageChannelMain` instances and transfers one end of each into the child:
 
 ```js
@@ -150,7 +164,7 @@ function yJe(e) {
     t.postMessage({ bootstrap: { processConfig: e.processConfig } }, [n.port1, r.port1, o.port1]));
 ```
 
-Return value (`main-app.beauty.js:85086-85090`):
+Return value (`main-app.beauty.js:85085-85090`):
 
 ```js
 return {
@@ -169,7 +183,7 @@ return {
 | **data** | `r.port2` (main→renderer) / `r.port1` (child) | the **renderer** (or whichever client claims it) | the 172-method `gateway` RPC surface |
 | **main data** | `o.port2` (main) / `o.port1` (child) | Electron main process | the narrower `coordinator-main` surface for the host's own needs |
 
-The child side accepts either carrier. `coordinator.beauty.js:35104-35114`:
+The child side accepts either carrier. `node-agent-node-agent-coordinator.beauty.js:35103-35114`:
 
 ```js
 function KU() {
@@ -183,20 +197,20 @@ function KU() {
 }
 ```
 
-* `XK(process)` (`JB:34993-34995`) returns `process.parentPort` when `"parentPort" in r` — the
+* `XK(process)` (`JB:34992-34995`) returns `process.parentPort` when `"parentPort" in r` — the
   Electron `utilityProcess` path. `PROVEN`.
-* `e2(r, e)` (`JB:35053-35079`) is the parent-port carrier. It validates the bootstrap frame and then
-  requires exactly three ports: `if (!fA(s) || !fA(a) || !fA(i)) return { adopted: !1, rejection: { detail: "parent handoff did not transfer three message ports" } };` (`JB:35057-35059`).
-* `QK(process.argv)` (`JB:34996-35052`) is a **legacy `child_process` fork-IPC carrier**: it parses a
-  `--bootstrap=<json>` argv entry (`$U = "--bootstrap="`, `JB:34989`), requires `process.send`
+* `e2(r, e)` (`JB:35052-35079`) is the parent-port carrier. It validates the bootstrap frame and then
+  requires exactly three ports: `if (!fA(s) || !fA(a) || !fA(i)) return { adopted: !1, rejection: { detail: "parent handoff did not transfer three message ports" } };` (`JB:35056-35059`).
+* `QK(process.argv)` (`JB:34995-35052`) is a **legacy `child_process` fork-IPC carrier**: it parses a
+  `--bootstrap=<json>` argv entry (`$U = "--bootstrap="`, `JB:34988`), requires `process.send`
   (`if (s == null) return { adopted: !1, rejection: { detail: "no renderer data channel was transferred" } };`,
-  `JB:35008`), and multiplexes the three logical channels over the single IPC pipe by wrapping frames
+  `JB:35007`), and multiplexes the three logical channels over the single IPC pipe by wrapping frames
   as `{ channel: "coordinator-control", frame }` / `{ channel: "coordinator-main-data", frame }`
-  (`iA`/`lA`, `JB:34981-34988`). `PROVEN` as code path; `INFERRED` as legacy: the fork-ipc carrier
+  (`iA`/`lA`, `JB:34980-34988`). `PROVEN` as code path; `INFERRED` as legacy: the fork-ipc carrier
   cannot express the renderer data port at all, and its rejection message is written in terms of a
   missing *renderer* data channel.
 
-The bootstrap payload is deliberately tiny. `coordinator.beauty.js:34963-34978`:
+The bootstrap payload is deliberately tiny. `node-agent-node-agent-coordinator.beauty.js:34962-34978`:
 
 ```js
 function Tw(r) {
@@ -209,15 +223,15 @@ function Tw(r) {
 So the child is told exactly three things at start: `appVersion: string`, `isPackaged: boolean`,
 `dataDir: string` (non-empty). `PROVEN`. Bootstrap failure is fatal and classified:
 `process.exit(ur.bootstrapRejected)` where `ur = { settledClean: 0, fault: 1, bootstrapRejected: 2 }`
-(`JB:34687`, `JB:39787`); the main process re-derives that class as `"bootstrap"` in
+(`JB:34686`, `JB:39786`); the main process re-derives that class as `"bootstrap"` in
 `fJe = { [vV.settledClean]: "clean", [vV.fault]: "breach", [vV.bootstrapRejected]: "bootstrap" }`
-(`main-app.beauty.js:84788`).
+(`main-app.beauty.js:84780`).
 
 ### 1.4 Renderer discovery: request/reply over IPC, then a port transfer
 
 The renderer never learns an address. It asks, and the main process pushes a port to it.
 
-**Preload** (`preload.beauty.js:4091-4102`, `4142`, `4146-4149`):
+**Preload** (`preload.beauty.js:4090-4102`, `4142`, `4146-4149`):
 
 ```js
 var { mainEdge: Ru, ...hu } = x.ipcRenderer.sendSync("sand:boot-snapshot-sync"),
@@ -239,7 +253,7 @@ x.ipcRenderer.on("sand:coordinator-port", (e) => {
 is not reachable from page script; the page can only cause a request, and only the preload can
 receive and unwrap the resulting port.
 
-**Main process handler** (`main-app.beauty.js:85108-85109`, `85227-85262`):
+**Main process handler** (`main-app.beauty.js:85107-85109`, `85227-85262`):
 
 ```js
 var EJe = "sand:coordinator-port-request",
@@ -274,7 +288,7 @@ e.ipcMain.handle(EJe, (r) => {
 
 ### 1.5 `claim` — the single-claimant gate
 
-`preload.beauty.js:4015-4036` is the entire claim implementation:
+`preload.beauty.js:4014-4036` is the entire claim implementation:
 
 ```js
 function li(e) {
@@ -305,13 +319,13 @@ function li(e) {
   after `release()` is a no-op.
 * `release()` clears the sink. It does **not** tell the main process; a subsequent `claim().request()`
   is a fresh request. The main-process side has a matching state machine (`{kind:"waiting",sink}` →
-  `{kind:"serving",runtime}` at `main-app.beauty.js:85228-85235`, `85255-85259`), so `release` does
+  `{kind:"serving",runtime}` at `main-app.beauty.js:85227-85235`, `85255-85259`), so `release` does
   not revoke the main-process side; only `revokeRendererPortRequest()`
-  (`main-app.beauty.js:85207-85209`) does, and that is called by the host, not the client.
+  (`main-app.beauty.js:85206-85209`) does, and that is called by the host, not the client.
 * `deliver(port)` calls `n?.onPort(port)` — the sink interface is `{ onPort(port) }`, where `port` is
   the narrowed facade built by `ci()`.
 
-`ci()` (`preload.beauty.js:4038-4061`) is a **capability-narrowing wrapper** around the raw
+`ci()` (`preload.beauty.js:4037-4061`) is a **capability-narrowing wrapper** around the raw
 `MessagePort`:
 
 ```js
@@ -369,7 +383,7 @@ required because a transferred `MessagePort` in a renderer does not begin delive
 ### 1.7 The frame protocol
 
 Both ends of the data port speak the same five-frame protocol. **Coordinator (server) side**,
-`coordinator.beauty.js:34862-34901`:
+`node-agent-node-agent-coordinator.beauty.js:34861-34901`:
 
 ```js
 function pA(r) {
@@ -398,10 +412,10 @@ function pA(r) {
 `PROVEN`. Five frame kinds: `lifecycle`, `request`, `cancel`, `reply`, `event`. The literal error
 string enumerates them: *"frame.kind must be lifecycle, request, cancel, reply, or event"*.
 
-**Lifecycle frames.** `YK(r)` (`JB:34903+`) validates them. The two phases observed are `hello`
+**Lifecycle frames.** `YK(r)` (`JB:34902+`) validates them. The two phases observed are `hello`
 (client→server), `ready` (server→client), `shutdown` (either direction). Protocol version constant
-`var jr = 3` (`JB:34842`). The server session state machine is `tC()`
-(`coordinator.beauty.js:39499-39599`):
+`var jr = 3` (`JB:34841`). The server session state machine is `tC()`
+(`node-agent-node-agent-coordinator.beauty.js:39498-39599`):
 
 ```js
 let t = "awaiting-hello",
@@ -422,19 +436,19 @@ if (m.kind === "lifecycle" && m.phase === "ready") { d("client posted a server-d
 ```
 
 `PROVEN`. Reusing an in-flight `requestId` is a protocol breach:
-`` d(`request.requestId ${m.requestId} reused while in flight`) `` (`JB:39569`).
+`` d(`request.requestId ${m.requestId} reused while in flight`) `` (`JB:39568`).
 
-**Replies.** `c(m, E) => r.post({ kind: "reply", requestId: m, outcome: E })` (`JB:39518-39520`),
+**Replies.** `c(m, E) => r.post({ kind: "reply", requestId: m, outcome: E })` (`JB:39517-39520`),
 with `outcome` either `{status:"ok", value}` or `{status:"failed", failure:{code, message, ...}}`
-(`JB:37032-37042`). `PROVEN`.
+(`JB:37031-37042`). `PROVEN`.
 
 **Cancellation.** A `cancel` frame aborts the in-flight request's `AbortController` and replies
 `{ status: "failed", failure: { code: "cancelled", message: "request cancelled" } }`
-(`UU = "cancelled"`, `JB:34845`; abort + reply at `JB:39575-39579`). `PROVEN`.
+(`UU = "cancelled"`, `JB:34844`; abort + reply at `JB:39574-39579`). `PROVEN`.
 
 **Events.** Server→client, one-way: `r.post({ kind: "event", family: m, payload: E })`
-(`postEvent`, `JB:39594-39596`). `family` is drawn from a **named channel vocabulary** —
-`wJ` at `coordinator.beauty.js:36829-36849`:
+(`postEvent`, `JB:39593-39596`). `family` is drawn from a **named channel vocabulary** —
+`wJ` at `node-agent-node-agent-coordinator.beauty.js:36828-36849`:
 
 ```js
 wJ = { ...$2, transcript: "transcript", agents: "agents", "agent-upserted": "agent-upserted",
@@ -446,8 +460,8 @@ wJ = { ...$2, transcript: "transcript", agents: "agents", "agent-upserted": "age
        "server-roster-changed": "server-roster-changed", "server-page-title-changed": "server-page-title-changed" }
 ```
 
-plus the transport-state family `mA = "coordinator-transport-state"` (`JB:34979`) and the transcript
-source family `qU = "coordinator-transcript-source"` (`JB:34980`).
+plus the transport-state family `mA = "coordinator-transport-state"` (`JB:34978`) and the transcript
+source family `qU = "coordinator-transcript-source"` (`JB:34979`).
 
 The renderer's decoder confirms the framing exactly. `P3e(e)`:
 
@@ -459,7 +473,7 @@ function P3e(e){ let t="awaiting-ready",n=0; ...
 ```
 
 `PROVEN`. Note the two sides use **different requestId prefixes**: the renderer uses `r-<n>`
-(`L = \`r-${n}\``), the control client uses `c-<n>` (`R = \`c-${o}\``, `JB:35148`). The two are
+(`L = \`r-${n}\``), the control client uses `c-<n>` (`R = \`c-${o}\``, `JB:35147`). The two are
 correlated only within their own port, which is consistent with per-port session state.
 
 Server→client control frames are also decoded client-side: `v3e(e)` accepts
@@ -487,7 +501,7 @@ resolved. `UNKNOWN`: the full failure-code table.
 The coordinator does not implement the agent runtime. It **proxies** the 172 methods to a
 **box gateway** over HTTP. This is the single most important structural fact in this section.
 
-`coordinator.beauty.js:36150-36155` (inside the gateway client class):
+`node-agent-node-agent-coordinator.beauty.js:36149-36155` (inside the gateway client class):
 
 ```js
 let E = await fetch(`${a.baseUrl}${Rw}/${e}`, {
@@ -499,10 +513,10 @@ let E = await fetch(`${a.baseUrl}${Rw}/${e}`, {
 });
 ```
 
-with `Rw = "/api"` at `coordinator.beauty.js:35266`. `PROVEN`. So **the local RPC method name is also
+with `Rw = "/api"` at `node-agent-node-agent-coordinator.beauty.js:35265`. `PROVEN`. So **the local RPC method name is also
 the gateway HTTP path segment**: `sendPrompt` ⇒ `POST {baseUrl}/api/sendPrompt`.
 
-Authentication and correlation headers, `coordinator.beauty.js:35266-35273` and `35956-35959`:
+Authentication and correlation headers, `node-agent-node-agent-coordinator.beauty.js:35265-35273` and `35956-35959`:
 
 ```js
 var Rw = "/api",
@@ -530,11 +544,11 @@ function L2(r, e) {
 `PROVEN`. Headers on the box hop: `authorization: Bearer <token>`, `traceparent`,
 `x-sand-slim-avatars: 1`, and optionally `x-sand-mint-dedupe`. Health probe path `/health`.
 Three auxiliary endpoints: `/api/{method}` (POST), `/events` (GET, `accept: text/event-stream`,
-`JB:36545-36546`), `/events/echo?...nonce=...` (POST, `JB:36048-36049`; SSE comment lines beginning
-`":echo "` are sliced with `h.slice(Iw.length)` at `JB:36572-36573`). `PROVEN`.
+`JB:36544-36546`), `/events/echo?...nonce=...` (POST, `JB:36047-36049`; SSE comment lines beginning
+`":echo "` are sliced with `h.slice(Iw.length)` at `JB:36571-36573`). `PROVEN`.
 
 Where does `{baseUrl, token}` come from? Presigned by the **backend** and stamped onto the box. The
-main process builds the descriptor in `Aze()`, `main-app.beauty.js:78424-78431`:
+main process builds the descriptor in `Aze()`, `main-app.beauty.js:78423-78431`:
 
 ```js
 function Aze(e, t, n, r) {
@@ -548,7 +562,7 @@ function Aze(e, t, n, r) {
 }
 ```
 
-and the broker stamp is unpacked in `q7()`, `main-app.beauty.js:78409-78422`:
+and the broker stamp is unpacked in `q7()`, `main-app.beauty.js:78412-78422`:
 
 ```js
 function q7({ box: e, routeAccountScope: t }) {
@@ -569,25 +583,25 @@ field 11 `gateway_token`, 4 `network_token`, 5 `exec_daemon_auth_token`, 6 `exec
 7 `vnc_url`, 9 `terminals_folder`, 12 `fork_vnc_base_url`, 15 `image`.
 
 The main process exposes the resolver on the control edge: `resolveGatewayConnection: ({ path: r }) => t.connect(r)`
-(`main-app.beauty.js:83009`), and the coordinator calls it four times with the four **edge path** names:
+(`main-app.beauty.js:83008`), and the coordinator calls it four times with the four **edge path** names:
 
 ```js
-resolveGatewayConnection: () => s.commands.resolveGatewayConnection({ path: "gateway" }),      // JB:39804
-resolveConnection: () => s.commands.resolveGatewayConnection({ path: "passkey-provider" }),    // JB:39976
-resolveConnection: () => s.commands.resolveGatewayConnection({ path: "cookie-provider" }),     // JB:40008
-let me = await Te.run(() => r.control.resolveGatewayConnection({ path: "local-exec-refresh" })),// JB:39096
+resolveGatewayConnection: () => s.commands.resolveGatewayConnection({ path: "gateway" }),      // JB:39803
+resolveConnection: () => s.commands.resolveGatewayConnection({ path: "passkey-provider" }),    // JB:39975
+resolveConnection: () => s.commands.resolveGatewayConnection({ path: "cookie-provider" }),     // JB:40007
+let me = await Te.run(() => r.control.resolveGatewayConnection({ path: "local-exec-refresh" })),// JB:39095
 ```
 
 `PROVEN`. Four gateway *paths* exist — and these are exactly the four non-method edge names that
 appear in the extended authorization map (§4.1):
 
 ```js
-YM = ["gateway", "passkey-provider", "cookie-provider", "local-exec-refresh"]   // JB:32760
+YM = ["gateway", "passkey-provider", "cookie-provider", "local-exec-refresh"]   // JB:32759
 ```
 
 ### 1.9 The loopback allowlist, precisely
 
-`coordinator.beauty.js:33803-33806`:
+`node-agent-node-agent-coordinator.beauty.js:33802-33806`:
 
 ```js
 var f$ = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
@@ -598,7 +612,7 @@ function _o(r) {
 
 Three call sites in the whole bundle (`grep -c '_o('` = 4 including the definition):
 
-1. `JB:33850` — inside `SU(r)`, a **URL validator**:
+1. `JB:33849` — inside `SU(r)`, a **URL validator**:
    ```js
    return e.href !== r || e.username.length > 0 || e.password.length > 0 || y$.has(e.protocol)
      ? !1
@@ -609,10 +623,10 @@ Three call sites in the whole bundle (`grep -c '_o('` = 4 including the definiti
          : e.hostname.length > 0 || e.pathname.length > 0;
    ```
    `PROVEN`: plain `http:` is accepted **only** for loopback hostnames; `https:` is accepted for any
-   host; everything else falls through to a shape check. The scheme denylist `y$` (`JB:33810-33833`)
+   host; everything else falls through to a shape check. The scheme denylist `y$` (`JB:33809-33833`)
    blocks `javascript:`, `data:`, `file:`, `blob:`, `ws:`, `wss:`, `mailto:`, `chrome:`, etc.
-2. `JB:35340` — a VNC viewer URL check: `if (!_o(t.hostname) || !t.pathname.endsWith("/vnc.html")) return r;`
-3. `JB:35458` — inside `In(r)`, the **base-URL classifier**:
+2. `JB:35339` — a VNC viewer URL check: `if (!_o(t.hostname) || !t.pathname.endsWith("/vnc.html")) return r;`
+3. `JB:35457` — inside `In(r)`, the **base-URL classifier**:
    ```js
    function In(r) {
      if (r == null || r.length === 0) return "unknown";
@@ -621,7 +635,7 @@ Three call sites in the whole bundle (`grep -c '_o('` = 4 including the definiti
    }
    ```
    whose result is reported as `baseUrlKind` on gateway reachability telemetry
-   (`JB:36203`: `baseUrlKind: In(a?.baseUrl)`).
+   (`JB:36202`: `baseUrlKind: In(a?.baseUrl)`).
 
 `PROVEN`. Interpretation:
 
@@ -632,7 +646,7 @@ Three call sites in the whole bundle (`grep -c '_o('` = 4 including the definiti
   `INFERRED` (strong: it is the only consumer, it is a client-side check on an outbound URL, and the
   bearer token is attached to that same URL by `L2`).
 * It does **not** constrain any bind address, because the coordinator never binds. It also does not
-  constrain the *remote* hop (`https://api2.cursor.sh`, `G2 = "api2.cursor.sh"` at `JB:36704`) —
+  constrain the *remote* hop (`https://api2.cursor.sh`, `G2 = "api2.cursor.sh"` at `JB:36703`) —
   that one is hardcoded and must be HTTPS.
 * Practical consequence for a self-hosted host: to be compatible with this contract, a local box
   gateway must be reachable at a loopback hostname over plain HTTP **or** any host over HTTPS. That
@@ -670,7 +684,7 @@ Three call sites in the whole bundle (`grep -c '_o('` = 4 including the definiti
 Both the zod-shaped `parse` API that appears elsewhere in the coordinator and the RPC-layer validator
 are visible; the RPC layer uses a **custom combinator DSL implementing Standard Schema v1**.
 
-Base factory, `coordinator.beauty.js:32631-32646`:
+Base factory, `node-agent-node-agent-coordinator.beauty.js:32630-32646`:
 
 ```js
 function dr(r, e) {
@@ -690,7 +704,7 @@ function dr(r, e) {
 }
 ```
 
-Second base with a different vendor string, `coordinator.beauty.js:33650-33665`:
+Second base with a different vendor string, `node-agent-node-agent-coordinator.beauty.js:33649-33665`:
 
 ```js
 function aw(r, e) {
@@ -705,7 +719,7 @@ function aw(r, e) {
 `PROVEN`: two internal vendor tags, `"dune"` (`dr`, the field-validator base) and `"sand"` (`aw`, the
 labeled/custom base). Both expose `"~standard": { version: 1, vendor, validate }` — the
 [Standard Schema](https://standardschema.dev) v1 contract. `RH(r)`
-(`coordinator.beauty.js:32734-32737`) is the duck-type check used to accept *any* third-party
+(`node-agent-node-agent-coordinator.beauty.js:32733-32737`) is the duck-type check used to accept *any* third-party
 Standard Schema value:
 
 ```js
@@ -721,15 +735,15 @@ Standard Schema so external validators can be mixed in. `UNKNOWN`: whether "dune
 in-tree only (`FINDINGS.md:30` records all deps as `workspace:*`, i.e. in-tree).
 
 **There are two independent validation engines in this bundle.** A zod-compatible issue-code table
-appears at `coordinator.beauty.js:2705-2716` (`invalid_format`, `not_multiple_of`, `unrecognized_keys`,
+appears at `node-agent-node-agent-coordinator.beauty.js:2704-2716` (`invalid_format`, `not_multiple_of`, `unrecognized_keys`,
 `invalid_union`, `invalid_key`, `invalid_element`, `invalid_value`, `custom`) with a formatter
-`_E(r)` at `JB:2718-2720` that joins `path.join(".")` + message. That is a *different* layer
+`_E(r)` at `JB:2713-2716` that joins `path.join(".")` + message. That is a *different* layer
 (zod-style) and is **not** what validates RPC arguments. The RPC dispatcher calls
-`i.schema["~standard"].validate(o)` (`JB:37033`), i.e. the dune/sand engine. `PROVEN`.
+`i.schema["~standard"].validate(o)` (`JB:37032`), i.e. the dune/sand engine. `PROVEN`.
 
 ### 2.2 Combinator vocabulary
 
-All line numbers in `recon/beautified/coordinator.beauty.js`:
+All line numbers in `recon/beautified/node-agent-coordinator.beauty.js`:
 
 | Combinator | Line | `expects` string | Semantics |
 |---|---|---|---|
@@ -741,7 +755,7 @@ All line numbers in `recon/beautified/coordinator.beauty.js`:
 | `Ve(...r)` | 32689 | union of `expects` | tagged union / `oneOf`; first match wins |
 | `U(literal)` | 32674 | `JSON.stringify(r)` | exact literal (used for discriminants) |
 | `A(r)` | 32678 | — | **optional**: `{ ...r, optional: true }`; `_H()` (32628) reads `.optional === true` |
-| `at(r)` | 32681 | `` `${r.expects} | null` `` | **nullable** (`record-or-null`-style wrappers are built from this) |
+| `at(r)` | 32681 | (label: the inner type plus the literal suffix `null`) | **nullable** — `record-or-null`-style wrappers are built from this |
 | `p()` | 32659 | `"string"` | string |
 | `ne()` | 32662 | `"number"` | finite number (`Number.isFinite`); non-finite rejected with `received: "non-finite number"` |
 | `Z()` | 32671 | `"boolean"` | boolean |
@@ -761,13 +775,13 @@ All line numbers in `recon/beautified/coordinator.beauty.js`:
 `K,V` type codes, §5.6), `optional`=`A()`, `enum`=`_e()`/`dt()`, `void`/empty=`cr()`/`Ore`,
 `unknown`=`$x()`, `scalar`/`temporal` are **not** RPC-DSL combinators — they are the
 **protobuf field-kind** vocabulary in the descriptor parser (§5.6: `{ kind: "scalar", T: Number(t) }`
-at `JB:33611`) and the reply-container vocabulary in the renderer (§2.7). The `record-or-null`
+at `JB:33610`) and the reply-container vocabulary in the renderer (§2.7). The `record-or-null`
 wrapper is a **reply container name**, not a combinator (`k3e["record-or-null"]`). This mapping is
 `PROVEN` for the left-hand names; the right-hand correspondence is stated where observed.
 
 ### 2.3 A method's arguments are declared with `I()`
 
-`coordinator.beauty.js:32738-32755`:
+`node-agent-node-agent-coordinator.beauty.js:32737-32755`:
 
 ```js
 var Hh = class extends Error {
@@ -802,7 +816,7 @@ function I() {
 
 ### 2.4 The binding table: `nA = Rn("gateway", { methods })`
 
-`coordinator.beauty.js:32756-32758`:
+`node-agent-node-agent-coordinator.beauty.js:32755-32758`:
 
 ```js
 function Rn(r, e) {
@@ -819,7 +833,7 @@ Three are declared:
 | `"coordinator-control"` (`DU`) | 34711–34749 | 29 | control port | Electron main process, coordinator→host commands |
 | `"coordinator-main"` (`LU`) | 34804 | 40 (`WK` 24 ∪ `KK` 8, deduped) | main-data port | host-internal calls into the coordinator |
 
-`PROVEN`. The gateway table's shape, at its head (`coordinator.beauty.js:34169-34178`):
+`PROVEN`. The gateway table's shape, at its head (`node-agent-node-agent-coordinator.beauty.js:34168-34178`):
 
 ```js
 nA = Rn("gateway", {
@@ -844,10 +858,10 @@ nA = Rn("gateway", {
 
 * **inline object literal** — `openAgentWindowed: I().args({ id: q(), limit: ne() })`;
 * **named schema variable** — `getAgentTranscript: I().args(Tt)`, where `Tt = { id: q() }`
-  (`JB:33876`);
+  (`JB:33875`);
 * **derived/transformed** — `sendPrompt: I().args(O$)`, where `O$ = Qh(w(pw), uw)`
-  (`JB:33920`), with `pw` a 21-field object literal (`JB:33897-33919`) and `uw` a transform that
-  **deletes an empty `mcpConfigJson`** (`JB:33892-33896`):
+  (`JB:33919`), with `pw` a 21-field object literal (`JB:33896-33919`) and `uw` a transform that
+  **deletes an empty `mcpConfigJson`** (`JB:33891-33896`):
   ```js
   function uw(r) {
     if (r.mcpConfigJson === void 0 || r.mcpConfigJson.trim().length > 0) return r;
@@ -857,7 +871,7 @@ nA = Rn("gateway", {
   ```
   This is a deliberate "omit rather than send empty" normalization. `PROVEN`.
 
-**Verification performed.** An independent structural parse of `coordinator.beauty.js:34169-34706`
+**Verification performed.** An independent structural parse of `node-agent-node-agent-coordinator.beauty.js:34168-34706`
 (bracket-balanced, not line-based) found **exactly 172** top-level entries in `nA.methods`, of which
 **21** are `I().noArgs` and **151** are `I().args(...)`. This matches `recon/rea/coordinator-methods.json`
 (172 entries) exactly, method-for-method. `PROVEN`.
@@ -865,7 +879,7 @@ nA = Rn("gateway", {
 ### 2.5 Argument-schema variable vocabulary
 
 A small set of shared, named field schemas is reused across methods. Recovered definitions
-(all `coordinator.beauty.js`):
+(all `node-agent-coordinator.beauty.js`):
 
 | Var | Line | Declaration | Meaning |
 |---|---|---|---|
@@ -880,13 +894,13 @@ A small set of shared, named field schemas is reused across methods. Recovered d
 | `C$` | 33889 | `{ id: q(), beforeSeq: A(ne()), limit: ne(), sessionId: A(p()), unreadBoundaryAt: A(ne()) }` | transcript tail read |
 | `pw` | 33897-33919 | 21 fields, see §5.2 | send-prompt body |
 | `Ks` | ~33931 | `w({ ...bU, ... })` where `bU = { name, description, title, avatarShape, avatarColor }` (~33930) | create-agent body |
-| `T$` | 33882 | `dt("approval platform", Eo)` | approval surface tag ("bot_share" is one such value, `JB:4099`) |
+| `T$` | 33882 | `dt("approval platform", Eo)` | approval surface tag ("bot_share" is one such value, `JB:4098`) |
 | `$s` | 33927 | `w({ shareId: p(), visibility: _e("bot template visibility", yU) })` | template visibility |
 | `fw` | 34009 | `kU(j$)` = `{ entryId, requestId, resolution, agentId, sessionId }` (`kU` at 33934) | local-tool-permission resolution |
 | `gw` | 34010 | `kU(_e("connector grant resolution", UE))` | connector-grant resolution |
 
 `q()` is the **agent-id validator** and deserves its own line, because it defines what an `agentId`
-*is*. `coordinator.beauty.js:33696-33701`:
+*is*. `node-agent-node-agent-coordinator.beauty.js:33695-33701`:
 
 ```js
 function q() {
@@ -897,7 +911,7 @@ function q() {
 }
 ```
 
-`ue` at `coordinator.beauty.js:419-421` → `iF(r)` at `407-418`:
+`ue` at `node-agent-node-agent-coordinator.beauty.js:418-421` → `iF(r)` at `407-418`:
 
 ```js
 function iF(r) {
@@ -918,11 +932,11 @@ function iF(r) {
 already trimmed. `INFERRED` (high confidence): the agent store on the box is a directory tree keyed by
 agent id, so the id is validated as a directory name at the RPC boundary to prevent traversal from a
 client. A capped variant exists: `eA = Ot(\`non-blank string of at most ${rw} characters\`, r => XL(r) ? ue(r) : null)`
-with `rw = 64` (`JB:33602`, `33608-33609`), used where a *derived name* is accepted.
+with `rw = 64` (`JB:33701`, `33608-33609`), used where a *derived name* is accepted.
 
 ### 2.6 Dispatch: name lookup, validation, handler call
 
-`coordinator.beauty.js:37002-37043`:
+`node-agent-node-agent-coordinator.beauty.js:37001-37043`:
 
 ```js
 function Y2(r, e) {
@@ -948,8 +962,8 @@ function Vw(r, e) {
 }
 ```
 
-with `j2 = w({})` (`JB:37001`) as the default (empty object) schema, and failure codes
-`dA = "unknown-method"`, `cA = "invalid-args"` (`JB:34843-34844`). `PROVEN`. The pipeline is:
+with `j2 = w({})` (`JB:37000`) as the default (empty object) schema, and failure codes
+`dA = "unknown-method"`, `cA = "invalid-args"` (`JB:34842-34844`). `PROVEN`. The pipeline is:
 
 ```
 frame.request {method, args, demand?}
@@ -960,11 +974,11 @@ frame.request {method, args, demand?}
   → reply {status, value|failure}
 ```
 
-`Wt(r, e) = typeof e == "string" && Object.hasOwn(r, e)` (`JB:32616-32618`) — the lookup is
+`Wt(r, e) = typeof e == "string" && Object.hasOwn(r, e)` (`JB:32615-32618`) — the lookup is
 `Object.hasOwn`, so `__proto__`, `constructor`, `toString` are not callable as methods. `PROVEN`.
 
-The **edge factory's** version, `Vw(r, e)` is bound at `coordinator.beauty.js:37029` and instantiated
-for the data port at `JB:40211`:
+The **edge factory's** version, `Vw(r, e)` is bound at `node-agent-node-agent-coordinator.beauty.js:37028` and instantiated
+for the data port at `JB:40210`:
 
 ```js
 Te = tC(
@@ -973,7 +987,7 @@ Te = tC(
 ),
 ```
 
-and for the main-data port at `JB:40244`. `PROVEN`. Each `tC()` session has its **own**
+and for the main-data port at `JB:40243`. `PROVEN`. Each `tC()` session has its **own**
 `dispatchRequest`, so the same 172-name table is filtered through two different second-stage
 dispatchers.
 
@@ -1025,7 +1039,7 @@ backend naming change.
 ### 2.8 The shared client-surface table: 141 of the 172
 
 The coordinator also carries a **second** table describing the same methods — but by request *shape*
-and reply *container*, not by field schema. `coordinator.beauty.js:36850-36993`:
+and reply *container*, not by field schema. `node-agent-node-agent-coordinator.beauty.js:36849-36993`:
 
 ```js
 K2 = { createAgentFromTemplate: { args: "object", reply: "record" } },
@@ -1047,8 +1061,8 @@ function CJ(r) { return Wt(W2, r); }
 var z2 = new Map(Object.entries(wJ).map(([r, e]) => [e, r]));   // NOTE: wJ here is the EVENT family map
 function bJ(r) { return z2.get(r) ?? null; }
 ...
-for (let [r, e] of Object.entries(nA.methods)) CJ(r) && (kJ[r] = e);   // JB:37057
-var OJ = { ...kJ, ...X2 };                                             // JB:37058
+for (let [r, e] of Object.entries(nA.methods)) CJ(r) && (kJ[r] = e);   // JB:37056
+var OJ = { ...kJ, ...X2 };                                             // JB:37057
 ```
 
 `PROVEN`. `{args: "none"|"object", reply: <container>}` is the entire shape descriptor.
@@ -1115,7 +1129,7 @@ listBoxMcpServers             completeMcpOAuth              updateForeverBox    
   background class is therefore not "the desktop's background work" — it is "work that is safe with
   nobody present", which is exactly the class a headless or phone-driven client needs. `INFERRED`.
 
-**The 9-method addition.** `X2` (`coordinator.beauty.js:37045-37055`) adds nine methods that are
+**The 9-method addition.** `X2` (`node-agent-node-agent-coordinator.beauty.js:37044-37055`) adds nine methods that are
 **not** on the gateway edge:
 
 ```js
@@ -1148,12 +1162,12 @@ if the port never arrives.
 
 `bJ(channel)` maps an **incoming gateway SSE event channel** back to a client event family:
 `z2 = new Map(Object.entries(wJ).map(([r, e]) => [e, r]))`, then `bJ(r) = z2.get(r) ?? null`
-(`JB:36997-37000`). Therefore: the gateway emits events on a channel string; the coordinator drops
-any channel that is not in its allowlist (`let M = bJ(_.channel); if (M == null) return;`, `JB:40076`
+(`JB:36996-37000`). Therefore: the gateway emits events on a channel string; the coordinator drops
+any channel that is not in its allowlist (`let M = bJ(_.channel); if (M == null) return;`, `JB:39907`
 region), and republishes the known ones to the client under the canonical family name. `PROVEN`.
 
-`$2` (spread into `wJ` at `JB:36830`) holds alias pairs such as `"agents-meetings": "agent-meetings"`,
-`"mcp-servers-updated": "mcp-servers"`, `"mcp-auth-completed": "mcp-auth"` (`JB:36825-36828`) —
+`$2` (spread into `wJ` at `JB:36829`) holds alias pairs such as `"agents-meetings": "agent-meetings"`,
+`"mcp-servers-updated": "mcp-servers"`, `"mcp-auth-completed": "mcp-auth"` (`JB:36824-36828`) —
 i.e. **the gateway's channel names differ from the client's family names for at least three
 families**. `PROVEN`. This matters for a clean-room implementation: the event channel namespace is a
 *third* namespace, distinct from both the RPC method names and the client family names.
@@ -1162,8 +1176,8 @@ families**. `PROVEN`. This matters for a clean-room implementation: the event ch
 ### 3.1 How to read this section
 
 Every method below is `PROVEN` to exist, with the stated authz class, on the named edge. Authz
-classes are quoted from `coordinator.beauty.js:32761-32934`. Argument field names are quoted from the
-schema expressions in `coordinator.beauty.js:34169-34706` (inline object literals) or from the named
+classes are quoted from `node-agent-node-agent-coordinator.beauty.js:32760-32934`. Argument field names are quoted from the
+schema expressions in `node-agent-node-agent-coordinator.beauty.js:34168-34706` (inline object literals) or from the named
 schema variables they reference (resolved to their declaration sites). The "on client surface (141)"
 column is `PROVEN` by set membership in `W2`/`Hm` (§2.8); a `—` means the method exists on the edge
 but is not in the shared client-surface table.
@@ -1293,7 +1307,7 @@ The read plane over the agent's transcript. `INFERRED`:
   `background`) show that *following the live tail* is treated as a presence-requiring act, while
   *reading history* is not. This is the cleanest single illustration of the class model.
 * `getAgentThread` takes `{id, rootId}` — a thread view rooted at an entry. `getConversationOutline`
-  yields the outline/TOC (`outline` is also an event family, `JB:36845`). `readMainAgentContext`
+  yields the outline/TOC (`outline` is also an event family, `JB:36844`). `readMainAgentContext`
   reads the coordinating agent's context. `searchMedia` is filed under `search` by the vendor but sits
   in the transcript bundle here.
 
@@ -1316,7 +1330,7 @@ The read plane over the agent's transcript. `INFERRED`:
 All six are `person`. `INFERRED`: composing and submitting user-visible content is the archetypal
 presence-requiring action. `sendPrompt`'s 21 argument fields are the richest schema in the surface
 (§5.2). `sendDraft` / `discardDraft` operate on a *draft* the agent produced and proposed — the drafts
-are typed by `$n` (`JB:4085-4103`) into `email-draft`, `slack-draft`, `meeting-chat-draft`.
+are typed by `$n` (`JB:4062-4080`) into `email-draft`, `slack-draft`, `meeting-chat-draft`.
 `reactToMessage` and `voteFeedback` are small acknowledgements.
 
 
@@ -1334,7 +1348,7 @@ are typed by `$n` (`JB:4085-4103`) into `email-draft`, `slack-draft`, `meeting-c
 Three methods, all `person`, all keyed by `agentId`: start/stop a **teaching recording** and read its
 status. `PROVEN` correspondence with the App Store positioning: *"Ask an AI agent to follow along as
 you complete a workflow once. It saves the steps as a routine and runs it on its own next time"*
-(`FINDINGS.md:125`). There is also a `teach-recording` **event family** (`JB:36838`), so the client
+(`FINDINGS.md:125`). There is also a `teach-recording` **event family** (`JB:36837`), so the client
 can follow recording state live. `INFERRED`: a routine is the artifact produced by a teach recording,
 and the Workflows domain (§3.9) is where routines are then edited and run.
 
@@ -1371,7 +1385,7 @@ Twelve methods, all `person`. `INFERRED`:
 
 * An **automation** is a trigger + enable flag attached to an agent:
   `Y$ = w({ schedule: p(), isEnabled: Z() })` and
-  `IU = w({ name, description, body, trigger: at(Y$), sourceRef: at(p()) })` (`JB:33939-33940`), so a
+  `IU = w({ name, description, body, trigger: at(Y$), sourceRef: at(p()) })` (`JB:34012-34014`), so a
   workflow body plus an optional schedule plus an optional `sourceRef` *is* an automation. There is
   also a **webhook** credential (`getAutomationWebhookCredential`) and an account-wide listing
   (`listAllAutomations`).
@@ -1401,8 +1415,8 @@ Twelve methods, all `person`. `INFERRED`:
 ### 3.10 Subagents & async tasks
 
 Two `person` reads keyed by `id`. `PROVEN` entity backing: `aiserver.v1.GrokBotRunningSubagent`
-(`{subagent_id, subagent_type, title, started_at_ms}`) and a `subagents` event family (`JB:36834`) plus
-`async-tasks` (`JB:36835`). `INFERRED`: subagents are long-running child work items whose *listing* is
+(`{subagent_id, subagent_type, title, started_at_ms}`) and a `subagents` event family (`JB:36833`) plus
+`async-tasks` (`JB:36834`). `INFERRED`: subagents are long-running child work items whose *listing* is
 a person read, but whose *progress* is pushed as events.
 
 
@@ -1427,7 +1441,7 @@ variable_names, is_deprecated, mcp_config_json, skills, mcp_server_names, is_bot
 connector_type, variables_json, has_configured_variables}` and
 `aiserver.v1.GrokBotAgentDefinitionMcpServer` with `{id, name, type, scope, plugin_id, created_at_ms}`.
 `PROVEN` alias evidence: the gateway's `mcp-servers-updated` channel is republished to clients as the
-`mcp-servers` family, and `mcp-auth-completed` as `mcp-auth` (`JB:36826-36827`).
+`mcp-servers` family, and `mcp-auth-completed` as `mcp-auth` (`JB:36825-36827`).
 
 
 | method | authz | on client surface (141) | argument fields (from `nA.methods`) |
@@ -1492,8 +1506,8 @@ Seven methods, 5 `person` / 2 `background`. `INFERRED`: this is *bot* sharing, n
 "publish yourself as a template other people can install". `PROVEN` supporting literals: the
 onboarding copy in the renderer includes *"Create a public template of yourself that I can share with
 somebody else"* and *"Share with your Team"* / *"Publish to team"* (renderer i18n catalogue), and
-`yU = ["public", "team"]` is the visibility enum (`JB:33802`) used by `setBotTemplateVisibility`.
-`$s = w({ shareId: p(), visibility: _e("bot template visibility", yU) })` (`JB:33927`).
+`yU = ["public", "team"]` is the visibility enum (`JB:33801`) used by `setBotTemplateVisibility`.
+`$s = w({ shareId: p(), visibility: _e("bot template visibility", yU) })` (`JB:33926`).
 `PROVEN` entity backing: `aiserver.v1.GrokBotMarketplaceListing` with 16 fields including
 `template_id`, `pinned_template_version_id`, `blob_object_key`, `slug`, `category`, `categories`,
 `share_id`, `status`, `creator_id`. The two `background` methods are the *reads* a client can do
@@ -1530,7 +1544,7 @@ The lifecycle is visible in the argument schemas:
 
 The `refused: ae(B$)` field where `B$ = w({ name, kind: _e("app secret refusal kind", dU), message,
 permanent })` and `dU = ["not_owned","not_sensitive","host_error","value_not_saved"]`
-(`JB:33762`, `JB:33929`) is a `PROVEN` **secret-write refusal taxonomy** — i.e. the client reports back
+(`JB:33761`, `JB:33928`) is a `PROVEN` **secret-write refusal taxonomy** — i.e. the client reports back
 which secrets the host refused to persist and why. That is a security-relevant contract detail worth
 reproducing.
 
@@ -1558,8 +1572,8 @@ Five methods: `getForeverBoxStatus`, `ensureForeverBox`, `handBackForeverBox`, `
 the "Forever Box" is the always-on variant of the box — the user's persistent computer — and these
 methods request it, report whether the host still holds it, and hand it back. `PROVEN` supporting
 literals: the main process reads `e.egressTunnelOwnership` off the box descriptor
-(`main-app.beauty.js:78420`), and `Qre`/`hHe` classify the box's `egress_tunnel_ownership` as part of
-the box state. The "forever-box" event family exists (`JB:36836`), as does a telemetry event family
+(`main-app.beauty.js:78419`), and `Qre`/`hHe` classify the box's `egress_tunnel_ownership` as part of
+the box state. The "forever-box" event family exists (`JB:36835`), as does a telemetry event family
 `forever-box`. `INFERRED`: only `isEgressTunnelAvailable` is safe unattended because it is a pure
 capability probe.
 
@@ -1582,7 +1596,7 @@ Six methods, 4 `person` / 2 `background`. `INFERRED`:
   transcript by `entryId`;
 * `setBoxSecrets {secrets}` is `background`; `getBoxSecretsStatus` is `person` (a **read** gated on
   presence, which is the opposite of the usual pattern and therefore notable) —
-  `PROVEN`: `getBoxSecretsStatus: "person"` at `JB:32894`, noArgs;
+  `PROVEN`: `getBoxSecretsStatus: "person"` at `JB:32893`, noArgs;
 * `carryBoxSecretsToBot {serverId}` and `injectChromeCookies {cookies}` are `person`.
 
 `PROVEN` backing: the reply container for `getBoxSecretsStatus` is
@@ -1645,7 +1659,7 @@ Eight methods, 6 `person` / 2 `background`. `PROVEN` entity backing is unusually
 `aiserver.v1` carries `VoiceCallLineState` and `MintSandVoiceCallSecretResponse
 {client_secret, expires_at_unix_seconds, model, websocket_url}`, plus an
 `aiserver.v1.GrokBotService/VoiceCallHarnessSession` and `.../VoiceCallHarnessTool` connectrpc pair
-(`main-app.beauty.js:35778-35779`), and `MintSandVoiceCallSecretResponse.websocket_url` shows the
+(`main-app.beauty.js:35777-35779`), and `MintSandVoiceCallSecretResponse.websocket_url` shows the
 voice session itself runs over a **WebSocket** to the backend — *not* over the coordinator port.
 `PROVEN` local-side call record shape from the coordinator's own schemas:
 
@@ -1661,7 +1675,7 @@ answeredAtMs?, direction?: "to-main"|"to-voice", cut?: {atMs, heardMs}}`,
 `Q$ = {kind: "caller-speech-started"|"caller-speech-stopped"|"caller-interrupted"|
 "agent-speech-started"|"agent-speech-stopped"|"response-create"|"protocol-error", atMs}`,
 `eK = {id, name, argumentsJson, atMs, result?: {json, atMs}}`, `tK = {id, text, atMs}`
-(`JB:33941-33962`). `PROVEN`. The two `background` methods are `readVoiceCallSentMessages` and
+(`JB:34013-34037`). `PROVEN`. The two `background` methods are `readVoiceCallSentMessages` and
 `nudgeVoiceCall` — i.e. *reading out* and *prompting* a live call are unattended-safe, while
 *recording*, *setting presence*, *creating* and *previewing* a voice are not.
 
@@ -1688,7 +1702,7 @@ Eight methods, all `person`. Two sub-families, `PROVEN` distinguished by the ven
 * **Listener** — an inbound integration endpoint. `getListenerConnectUrl {platform, forceOauth?,
   oauthRedirectUri?}` returns a URL (reply container `connect-url` = `{url: string}`), and
   `completeGithubConnect {state, code?, installationId?, setupAction?, error?}` is the OAuth callback.
-  Note the **shape match** with the deep-link route table in `main-core.beauty.js:18297-18307`: the
+  Note the **shape match** with the deep-link route table in `main-core.beauty.js:18296-18307`: the
   `github-connect-callback` route validates `state` against
   `/cursor_grok_bot_github_v1\.[0-9a-f]{32}\.[0-9a-f]{32}/` and accepts exactly
   `{state, code?, installationId?, setupAction?: "install"|"update"|"request", error?}`. `PROVEN`:
@@ -1774,8 +1788,8 @@ in the *media* feature area (`PS.media` also includes `transcribeAudio`, `previe
 `setAgentAvatarBytes {id, pngBase64}` (`person`), `getAgentAvatar` and `getAgentNotificationAvatar`
 (both `background`), and for the *agent-definition* avatar there is
 `GrokBotAgentDefinitionIdentity.has_custom_avatar` plus `bU = {name, description, title, avatarShape,
-avatarColor}` (`JB:33930`). The header `x-sand-slim-avatars: 1` on box requests
-(`JB:35272`, set unless disabled) shows avatars are optionally served slimmed. `INFERRED`: avatars are
+avatarColor}` (`JB:33931`). The header `x-sand-slim-avatars: 1` on box requests
+(`JB:35271`, set unless disabled) shows avatars are optionally served slimmed. `INFERRED`: avatars are
 PNG bytes plus a generated *shape*+*color* fallback, and generation is a person action because it
 costs a model call.
 
@@ -1803,11 +1817,11 @@ is inferred** more aggressively than the rest of the dossier.
 
 ### 4.1 The map, and the extended map
 
-The literal map is `Kx` at `coordinator.beauty.js:32761-32934` — 172 keys, each value exactly
+The literal map is `Kx` at `node-agent-node-agent-coordinator.beauty.js:32760-32934` — 172 keys, each value exactly
 `"person"` or `"background"`. `PROVEN`; count verified by independent parse.
 
 A second, extended map adds the four **edge paths** and one new class value,
-`coordinator.beauty.js:32935-32941`:
+`node-agent-node-agent-coordinator.beauty.js:32934-32941`:
 
 ```js
 Qre = {
@@ -1826,13 +1840,13 @@ Qre = {
 * `"describes"` is a **third class value** that exists only for `local-exec-refresh`. It appears
   nowhere else in either bundle. `INFERRED`: it means *"this connection is read-only / describing
   only"*, i.e. resolving it reports state and cannot cause work. That reading is consistent with the
-  only thing the coordinator does with that path — a single call at `JB:39096` that fetches a
+  only thing the coordinator does with that path — a single call at `JB:39095` that fetches a
   connection to refresh local-exec state.
 * The extended map has **exactly one consumer in the coordinator** (the spread itself is unused!):
-  `grep -n 'Qre' coordinator.beauty.js` returns only the declaration. `PROVEN` negative.
+  `grep -n 'Qre' node-agent-coordinator.beauty.js` returns only the declaration. `PROVEN` negative.
 
 The **same extended map** reappears in the Electron main process at
-`main-app.beauty.js:74173-74356` under a different minified name (`R6t` for the 172, `hHe` for the
+`main-app.beauty.js:74172-74356` under a different minified name (`R6t` for the 172, `hHe` for the
 176), with byte-identical values, and there it *is* consumed — once. `PROVEN`.
 
 ### 4.2 The 36 `background` methods
@@ -1864,7 +1878,7 @@ single piece of evidence about the class's meaning.
 
 ### 4.3 The two predicates
 
-`coordinator.beauty.js:32942-32947` is the entire enforcement surface in the coordinator:
+`node-agent-node-agent-coordinator.beauty.js:32941-32947` is the entire enforcement surface in the coordinator:
 
 ```js
 function IH(r) {
@@ -1885,7 +1899,7 @@ function ZM(r, e) {
 `grep -n 'ZM('` returns exactly two lines: the definition and the single call site. `PROVEN`.
 
 **So there is precisely one place in the coordinator where the class changes behaviour**, and it does
-not deny. `coordinator.beauty.js:36248-36250`:
+not deny. `node-agent-node-agent-coordinator.beauty.js:36247-36250`:
 
 ```js
 dispatchCommand(e, t, o) {
@@ -1903,11 +1917,11 @@ bundles:
 
 | # | Site | Code | Effect |
 |---|---|---|---|
-| 1 | `coordinator.beauty.js:36249` | `this.clientPause === null && ZM(e, o?.demand) ? dispatchPersonCall : dispatchNow` | routes a gateway call through the *box-intent* path |
-| 2 | `main-app.beauty.js:74896` | `if (t === "parked" && hHe[se] === "background") throw new LS();` | refuses to wake a present-parked box for a `background`-class edge |
-| 3 | `coordinator.beauty.js:32935-32941` | `Qre = { gateway: …, … , ...Kx }` | declares edge classes; **never read** in the coordinator |
+| 1 | `node-agent-node-agent-coordinator.beauty.js:36248` | `this.clientPause === null && ZM(e, o?.demand) ? dispatchPersonCall : dispatchNow` | routes a gateway call through the *box-intent* path |
+| 2 | `main-app.beauty.js:74895` | `if (t === "parked" && hHe[se] === "background") throw new LS();` | refuses to wake a present-parked box for a `background`-class edge |
+| 3 | `node-agent-node-agent-coordinator.beauty.js:32934-32941` | `Qre = { gateway: …, … , ...Kx }` | declares edge classes; **never read** in the coordinator |
 
-Consumer 2 needs its surrounding function to be read correctly. `main-app.beauty.js:74892-74907`
+Consumer 2 needs its surrounding function to be read correctly. `main-app.beauty.js:74891-74907`
 (fragment of the transport-adoption loop; `se` is the **edge path** being resolved):
 
 ```js
@@ -1926,7 +1940,7 @@ async function J(se) {
 }
 ```
 
-The two error classes, `main-app.beauty.js:74698-74712`:
+The two error classes, `main-app.beauty.js:74697-74712`:
 
 ```js
 var yp = class extends u7.SandDomainError {
@@ -1944,10 +1958,10 @@ var yp = class extends u7.SandDomainError {
 `PROVEN`. **This is the inversion that gives the class its real meaning**, and it is worth stating
 plainly:
 
-* In **present-park** (`t === "parked"`, gated by `sand_desktop_present_park`, `main-app.beauty.js:74645`),
+* In **present-park** (`t === "parked"`, gated by `sand_desktop_present_park`, `main-app.beauty.js:74644`),
   a `background`-class call is **refused** — and the refusal reason is that the box is intentionally
   asleep. A `person`-class call **falls through and wakes it** (`P(j)` → `U(...)` → `j.connect()`).
-* In **away-park** (`sand_desktop_away_park`, `main-app.beauty.js:74644`), *everything* is refused with
+* In **away-park** (`sand_desktop_away_park`, `main-app.beauty.js:74643`), *everything* is refused with
   `SandAwayParkedError`: nobody is at the computer at all.
 
 So the class does not mean *"is a human present?"*. It means **"may this call be the reason the box
@@ -1955,7 +1969,7 @@ wakes up?"** — `person` = yes, `background` = no. A `background` call must be 
 already-running state or be deferred. `person` calls are, by construction, the ones for which a human
 is waiting on the result.
 
-Helper functions that make the same distinction in the coordinator, `JB:36251-36286`:
+Helper functions that make the same distinction in the coordinator, `JB:36250-36286`:
 
 ```js
 async dispatchPersonCall(e, t, o) {
@@ -1977,11 +1991,11 @@ async dispatchAfterBoxFoundAsleep(e, t, o) {
 `PROVEN`. A person call (a) declares box intent before dispatching, (b) is retried once if the box
 turns out to be asleep, and (c) notifies the host that the box was found asleep so the host can
 re-classify. `dispatchNow` then applies a small per-method `commandPolicies` override table
-(`JB:36225-36244`) for `sendPrompt`, `getForeverBoxStatus`, `ensureForeverBox`, `listAgents`,
+(`JB:36224-36244`) for `sendPrompt`, `getForeverBoxStatus`, `ensureForeverBox`, `listAgents`,
 `countAgents`, `openAgentTail`, `getAgentTranscriptTail`, `getCloudAgentInfo`, `transcribeAudio`,
 `createAgent`, `setDevGatewayOffline`, `setGatewayPaused`, `noteNetworkReturn`, `noteBoxAsleep` —
 i.e. per-method deadlines, roster/transcript read budgets, and a `createAgent` retry loop that
-dedupes by proven `baseUrl` (`createAgentWithRetry`, `JB:36288-36326`). `PROVEN`.
+dedupes by proven `baseUrl` (`createAgentWithRetry`, `JB:36287-36326`). `PROVEN`.
 
 ### 4.5 The `demand` field: how a client declares itself
 
@@ -1990,7 +2004,7 @@ call. This is the mechanism by which an unattended client (a phone, a cron, a he
 the host *"do not wake the box for me"*.
 
 **On the wire.** `demand` is an optional field of the `request` frame, and it is validated to exactly
-two values. `coordinator.beauty.js:34871-34880`:
+two values. `node-agent-node-agent-coordinator.beauty.js:34870-34880`:
 
 ```js
 let e = r.demand;
@@ -2033,7 +2047,7 @@ human is waiting for is `person`; the identical read repeated by a timer is `bac
 
 **Consumer side.** The dispatcher threads it through unchanged —
 `dispatchCommand(i.method, d.value, { signal: s, ...(a === void 0 ? {} : { demand: a }) })`
-(`JB:37038`), where `a` came from `u(m.requestId, m.method, m.args, m.demand)` (`JB:39572`).
+(`JB:37037`), where `a` came from `u(m.requestId, m.method, m.args, m.demand)` (`JB:39571`).
 `PROVEN`.
 
 **The coordinator's own internal calls.** The coordinator calls its own gateway client with
@@ -2041,13 +2055,13 @@ human is waiting for is `person`; the identical read repeated by a timer is `bac
 
 | Line | Call |
 |---|---|
-| `JB:37281` | `dispatchCommand("resolveVirtualCardApproval", t, { signal: o, demand: "background" })` |
-| `JB:38047` | `dispatchCommand("deleteAgents", { ids: fe }, { demand: "background" })` |
-| `JB:39916` | `dispatchCommand("listAgents", {}, { demand: "background" })` (server roster seed) |
-| `JB:40058` | `getAgentAutomations: (_) => we.dispatchCommand("getAgentAutomations", _, { demand: "background" })` |
-| `JB:40059` | `getAgentWorkflows: (_) => V.dispatchCommand("getAgentWorkflows", _, { demand: "background" })` |
-| `JB:40060` | `getSubagents: (_) => we.dispatchCommand("getSubagents", _, { demand: "background" })` |
-| `JB:40168` | `V.dispatchCommand("openAgentTail", M, { demand: "background" })` (the *server-tail* leg beside a person tail) |
+| `JB:37280` | `dispatchCommand("resolveVirtualCardApproval", t, { signal: o, demand: "background" })` |
+| `JB:38046` | `dispatchCommand("deleteAgents", { ids: fe }, { demand: "background" })` |
+| `JB:39915` | `dispatchCommand("listAgents", {}, { demand: "background" })` (server roster seed) |
+| `JB:40057` | `getAgentAutomations: (_) => we.dispatchCommand("getAgentAutomations", _, { demand: "background" })` |
+| `JB:40058` | `getAgentWorkflows: (_) => V.dispatchCommand("getAgentWorkflows", _, { demand: "background" })` |
+| `JB:40059` | `getSubagents: (_) => we.dispatchCommand("getSubagents", _, { demand: "background" })` |
+| `JB:40167` | `V.dispatchCommand("openAgentTail", M, { demand: "background" })` (the *server-tail* leg beside a person tail) |
 
 Two of these are notable. `resolveVirtualCardApproval` and `deleteAgents` are `person`-class methods,
 and the coordinator invokes them with an explicit `demand: "background"` — i.e. **the class is
@@ -2056,7 +2070,7 @@ reconciliation/cleanup work. `PROVEN`. This confirms the field is a *hint about 
 situation*, not a capability.
 
 **Not forwarded to the box.** `demand` does not appear in any header or query construction. The box
-hop's headers are built by `L2`/`requestHeaders` (`JB:35956-35959`, `JB:35266-35273`): `authorization`,
+hop's headers are built by `L2`/`requestHeaders` (`JB:35955-35959`, `JB:35265-35273`): `authorization`,
 `traceparent`, `x-sand-slim-avatars`, optionally `x-sand-mint-dedupe`, plus `content-type`. `PROVEN`
 negative. **The class is enforced entirely on the client/host side of the protocol; the box never
 sees it.**
@@ -2067,12 +2081,12 @@ These are as important as the positives, because they say what a clean-room host
 wants real authorization rather than a scheduling hint.
 
 * **No session token on the local RPC.** The frame schema is
-  `{kind, requestId, method, args, demand?}` (`JB:34862-34901`). No token, no signature, no nonce, no
+  `{kind, requestId, method, args, demand?}` (`JB:34861-34901`). No token, no signature, no nonce, no
   client identity, no capability set. `PROVEN` negative by exhaustion of the frame validator.
 * **No grant record.** There is no "grant" object in the coordinator keyed by method or client. The
   word `grant` appears only in `resolveConnectorGrant` (a *connector* grant — a third-party
   integration permission) and in `cookieOriginGrantStore` / `grantListAccess` in main-app (a cookie
-  *list* access grant, `main-app.beauty.js:91570-91572`). Neither is a client-authorization grant.
+  *list* access grant, `main-app.beauty.js:91580-91572`). Neither is a client-authorization grant.
   `PROVEN` negative.
 * **No per-call authorization failure.** The coordinator's failure codes are `unknown-method`,
   `invalid-args`, `cancelled`, and the gateway-derived set (`gateway-malformed-reply`,
@@ -2091,12 +2105,12 @@ wants real authorization rather than a scheduling hint.
 | Control | Evidence | Nature |
 |---|---|---|
 | `contextIsolation: true` on the main window | `FINDINGS.md:48` | process isolation |
-| the page can reach only `window.coordinatorPort` → `{ claim }` | `preload.beauty.js:4142`, `4015-4036` | capability narrowing |
-| the delivered port is a facade with no `transfer` overload | `preload.beauty.js:4038-4061` | capability narrowing |
-| **single claimant** — `claim()` returns `null` when already claimed | `preload.beauty.js:4019-4022` | mutual exclusion |
-| `assertTrustedRequester(r)` on `sand:coordinator-port-request` | `main-app.beauty.js:85238` | origin/frame assertion (implementation `UNKNOWN`) |
-| the port is only obtainable via `ipcRenderer.on` **inside the preload** | `preload.beauty.js:4146-4149` | page script cannot receive a port |
-| the coordinator's method lookup uses `Object.hasOwn` | `JB:32616-32618` | prototype-pollution guard |
+| the page can reach only `window.coordinatorPort` → `{ claim }` | `preload.beauty.js:4141`, `4015-4036` | capability narrowing |
+| the delivered port is a facade with no `transfer` overload | `preload.beauty.js:4037-4061` | capability narrowing |
+| **single claimant** — `claim()` returns `null` when already claimed | `preload.beauty.js:4018-4022` | mutual exclusion |
+| `assertTrustedRequester(r)` on `sand:coordinator-port-request` | `main-app.beauty.js:85237` | origin/frame assertion (implementation `UNKNOWN`) |
+| the port is only obtainable via `ipcRenderer.on` **inside the preload** | `preload.beauty.js:4145-4149` | page script cannot receive a port |
+| the coordinator's method lookup uses `Object.hasOwn` | `JB:32615-32618` | prototype-pollution guard |
 
 `PROVEN` for each row except the noted `UNKNOWN`. `INFERRED` overall: **local RPC access control is
 "one trusted renderer at a time, in a process-isolated context", and nothing finer.** Everything the
@@ -2131,7 +2145,7 @@ be flipped later.
 
 The host also exposes the raw signals into telemetry: `getScreenLocked`, `getScreensaverActive`,
 `getSystemIdleSeconds`, and the reconnect telemetry logs `window_focused` and `window_visible`
-(`main-app.beauty.js:74762-74765`). A client can *hint* at presence via `setWindowFocused {isFocused}`
+(`main-app.beauty.js:84761-84765`). A client can *hint* at presence via `setWindowFocused {isFocused}`
 (a `background`-class method, host domain), but the host does not depend on it. `PROVEN`.
 
 ### 4.8 The model, stated compactly
@@ -2176,12 +2190,12 @@ what makes "phone drives an unattended agent" safe by construction:
 The dossier can reconstruct the entity model from two independent places, which corroborate each
 other:
 
-1. **the RPC argument schemas** in `coordinator.beauty.js:34169-34706` — what a *client* sends;
+1. **the RPC argument schemas** in `node-agent-node-agent-coordinator.beauty.js:34168-34706` — what a *client* sends;
 2. **`aiserver.v1` protobuf descriptors embedded in the same bundle** — what the *backend* stores.
 
 The second is the more valuable and less obvious. `dist/node-agent-coordinator/main.cjs` contains
 **861 generated protobuf-es message classes**, each carrying its own compact descriptor. Decoded
-shape (`coordinator.beauty.js:6810-6848`):
+shape (`node-agent-node-agent-coordinator.beauty.js:6809-6848`):
 
 ```js
 function v1(r) { let e = r[0], t = e.indexOf("|"); return t === -1 ? e : e.slice(0, t); }
@@ -2192,9 +2206,9 @@ var Lt = class extends pt {
 };
 ```
 
-with the package prefix `et = "aiserver.v1."` (`JB:6859`) — and a **second** declaration of the same
-prefix `xP = "aiserver.v1."` at `JB:10245`, i.e. the descriptors were generated in more than one
-module. The parser (`N1`, `JB:6840-6859`; `iP`, `JB:6837-6840`) decodes
+with the package prefix `et = "aiserver.v1."` (`JB:6858`) — and a **second** declaration of the same
+prefix `xP = "aiserver.v1."` at `JB:10244`, i.e. the descriptors were generated in more than one
+module. The parser (`N1`, `JB:6839-6859`; `iP`, `JB:6836-6840`) decodes
 `"Name|no snake_name type[?|*][ @oneof]|…"` where a leading `?` marks optional, `*` repeated, `#N`
 references the Nth type in the descriptor's second array element, and `K,V` denotes a map. Scalar
 type codes are standard protobuf: `1` double, `2` float, `3` int64, `4` uint64, `5` int32, `8` bool,
@@ -2234,11 +2248,11 @@ message GrokBotAgent {                      // 29 fields
   §2.5); `legacy_agent_id` exists for migration. This matches the RPC layer, where every agent-scoped
   method takes `id: q()`.
 * `kind` is a **discriminated union** — `VE`/`FE` in the coordinator test `r.toAgent.kind !== "agent"
-  && r.toAgent.kind !== "cloud-agent"` (`JB:4111-4112`), so `agent` and `cloud-agent` are proven
+  && r.toAgent.kind !== "cloud-agent"` (`JB:4108-4110`), so `agent` and `cloud-agent` are proven
   values, and `X2`'s `restoreTemporalAgentRouting` implies a `temporal` value as well.
 * `harness` is a string whose value `"unsupported"` is a proven special case in the message-router
   dispatch: `m.harnessOf(M.id) === "unsupported"` ⇒ `{code:"server-transcript-read-failed",
-  message:"Unsupported agent harness"}` (`JB:40190-40191`, `40198-40199`).
+  message:"Unsupported agent harness"}` (`JB:40189-40191`, `40198-40199`).
 * `role`, `visibility`, `team_id`, `viewer_can_manage`, `viewer_is_owner` show the entity is
   **team-aware and viewer-projected**: the same row serialises differently per viewer.
 * The RPC-side creation body is `GrokBotAgentDefinitionIdentity`-adjacent: `CreateGrokBotAgentRequest`
@@ -2336,13 +2350,13 @@ message GrokBotTranscriptUnreadAnchor {
   on responses. `INFERRED`: "unread" is computed as *"entries newer than a timestamp or anchor"*,
   not stored per-entry. The coordinator's own decoder confirms the anchor shape:
   `tM(r)` returns `{kind:"none"}` when `!r.hasNewerRows`, else `{kind:"at", entryId, seq: Number(r.seq),
-  newerRows}` (`JB:31034-31043`). `PROVEN`.
+  newerRows}` (`JB:31033-31043`). `PROVEN`.
 
 ### 5.4 Transcript entry kinds
 
 Two vocabularies are recoverable, and they are **different**, which matters.
 
-**Local/client entry kinds** — `JE` at `coordinator.beauty.js:4084-4091`:
+**Local/client entry kinds** — `JE` at `node-agent-node-agent-coordinator.beauty.js:4083-4091`:
 
 ```js
 var JE = ["message", "tool-call", "send-message", "user-attachment", "notice", "event",
@@ -2350,7 +2364,7 @@ var JE = ["message", "tool-call", "send-message", "user-attachment", "notice", "
 ```
 
 `PROVEN`. A second, narrower set marks entries whose *body* is out-of-line or heavy:
-`zV = ["tool-call", "user-attachment", "mcp-app", ...Nx]` with `xte = new Set(zV)` (`JB:31027-31028`).
+`zV = ["tool-call", "user-attachment", "mcp-app", ...Nx]` with `xte = new Set(zV)` (`JB:31026-31028`).
 `PROVEN`; `Nx` was not resolved. `INFERRED`: these are the kinds held in the blob store rather than
 inline.
 
@@ -2358,7 +2372,7 @@ inline.
 backend accepts is `UNKNOWN`; the client's `JE` is the best available list.
 
 **Widget/approval entries are `send-message` with a typed payload.** `PROVEN` by the predicates at
-`coordinator.beauty.js:4092-4100`:
+`node-agent-node-agent-coordinator.beauty.js:4091-4100`:
 
 ```js
 function KO(r) { return r.kind === "send-message" && r.message.type === "local-tool-permission"
@@ -2368,7 +2382,7 @@ function WO(r) { return r.kind === "send-message" && r.message.type === "auto-re
                         && FO(r.message.approval.command) != null; }
 ```
 
-and by the channel accessor `qE(r)` (`JB:4113-4119`) which reads `r.channel` for `kind === "message"`
+and by the channel accessor `qE(r)` (`JB:4111-4117`) which reads `r.channel` for `kind === "message"`
 and `r.message.channel` for `send-message` of type `text` or `attachment`. `PROVEN`. Therefore:
 
 * entry kinds `message` and `send-message` both carry a `channel`;
@@ -2378,8 +2392,8 @@ and `r.message.channel` for `send-message` of type `text` or `attachment`. `PROV
 * `message.type === "auto-review-approval"` carries `message.approval.surface` (proven value
   `"bot_share"`) and `message.approval.command`.
 
-`PROVEN` aliases: `Ea.callIdOf(channel) === null` for call channels (`JB:4120-4122`), and channel
-prefix `VO = "meeting:"` (`JB:4123`) with `k0()`/`O0()` extracting meeting identity. So **a channel is
+`PROVEN` aliases: `Ea.callIdOf(channel) === null` for call channels (`JB:4118-4121`), and channel
+prefix `VO = "meeting:"` (`JB:4121`) with `k0()`/`O0()` extracting meeting identity. So **a channel is
 a namespaced string**, with `meeting:<id>` being one proven form.
 
 ### 5.5 The box
@@ -2463,7 +2477,7 @@ message EnsureSandBoxResponse {
 `PROVEN`. Cross-check with the host code in §1.8: `baseUrl = e.gatewayUrl`, `token = e.gatewayToken`,
 `headers[x-sand-network-token] = e.networkToken`, `vncProxy = {primaryUrl: e.vncUrl, forkBaseUrl:
 e.forkVncBaseUrl}` — **every field consumed, field-for-field**, including `egressTunnelOwnership`
-(`main-app.beauty.js:78414-78421`). This is a strong verification that the descriptor decode is
+(`main-app.beauty.js:78413-78421`). This is a strong verification that the descriptor decode is
 correct.
 
 The complementary message set is enumerable from the names alone and is `PROVEN` as a set: the
@@ -2479,13 +2493,13 @@ descriptor list contains a full admin surface (`Admin*`, 40+ messages), a team s
 | Entity | Evidence (`PROVEN`) | Notes |
 |---|---|---|
 | **Group** | local `createGroup {name, description, memberAgentIds: string[], humanMemberUserIds?: number[], namedBy?, creationRoute, clientNonce?}`; `setGroupMembers {id, memberAgentIds, requesterAgentId?}`; `GrokBotBoxRoomSummary {room_id, members_server_bound`…}`; `GrokBotGroupChatDocumentAssetUrl {name, url, expires_at_ms}`; `GrokBotTeamAgentSharedBox {box_key, kind, session_ids}` | A group is a *room* of agents (and optionally humans) with a shared box. `namedBy` and `clearGeneratedRoomNameStamps {rooms: [{id, generatedName}]}` show room names may be model-generated and are tracked with a stamp so a human rename is not clobbered. |
-| **Tray** | `getTrays` (noArgs, `background`), `dismissTray {id}`, `clearTrays` (noArgs, `person`); event family `"tray"` (`JB:36833`) | `INFERRED`: a tray is a *pending-item* surface — a notification/approval queue shown outside the transcript. No protobuf descriptor named `*Tray*` exists in the set, so the tray is coordinator-local state, not a backend entity. `PROVEN` negative for a Tray descriptor. |
+| **Tray** | `getTrays` (noArgs, `background`), `dismissTray {id}`, `clearTrays` (noArgs, `person`); event family `"tray"` (`JB:36832`) | `INFERRED`: a tray is a *pending-item* surface — a notification/approval queue shown outside the transcript. No protobuf descriptor named `*Tray*` exists in the set, so the tray is coordinator-local state, not a backend entity. `PROVEN` negative for a Tray descriptor. |
 | **Task** | local `getAgentTasks {agentId}`, `markAgentTaskDone`, `markAgentTaskRead`, `setAgentTaskPinned` all `{id: q(), …}`-ish; descriptors `GrokBotTaskListMessage {is_user, text}`, `GrokBotTaskListFinishedWork {title, is_failed}`, `DismissGrokBotTaskRequest` | Two-layer: a *task list* the agent maintains (message/finished-work rows) and a *dismiss* RPC. `getAgentTasks` is `person` while `getAgentTodos` is `background` — they are different things: `agentTasks` are the waiting-for-you queue, `agentTodos` the agent's own checklist. `PROVEN` classes. |
 | **Subagent** | `GrokBotRunningSubagent {subagent_id, subagent_type, title, started_at_ms}`; local `getSubagents {id}`; event family `subagents` | Ephemeral child runs. Note the id is `subagent_id`, *not* `agent_id` — a subagent is not a first-class agent. |
 | **Automation** | `GrokBotAgentAutomation {automation_id, record_json}`; `SetGrokBotAgentAutomationEnabledRequest`; `ListGrokBotAccountAutomationsResponse`/`GrokBotAccountAutomationGroup`; local `IU = w({name, description, body, trigger: at({schedule, isEnabled}), sourceRef: at(p())})` | `record_json` + `record_json`-style storage means the automation body is **opaque JSON owned by the client** — a very reproducible design (the host stores, the client interprets). |
-| **Workflow** | local `lw = {id: p(), workflowId: p()}`; `IU` above is the workflow body; `Px = ["plugins","secrets","skills","memories","automations","files","description"]` with `jV(r, e) => Px.indexOf(r.kind) - Px.indexOf(e.kind)` (`JB:31044-31047`) | `Px` is the ordering of **agent-definition sections** for display/diff. `jV` is a comparison function — `INFERRED`: used to sort definition sections in a stable order, which is what a workflow/definition editor needs. |
+| **Workflow** | local `lw = {id: p(), workflowId: p()}`; `IU` above is the workflow body; `Px = ["plugins","secrets","skills","memories","automations","files","description"]` with `jV(r, e) => Px.indexOf(r.kind) - Px.indexOf(e.kind)` (`JB:31043-31047`) | `Px` is the ordering of **agent-definition sections** for display/diff. `jV` is a comparison function — `INFERRED`: used to sort definition sections in a stable order, which is what a workflow/definition editor needs. |
 | **Run** | `GrokBotBoxState.run_state`, `GetSandBoxRunStateRequest/Response`, local `interruptAgentRun {id, sessionId?}` | `INFERRED`: a *run* is one turn-execution episode; `interruptAgentRun` targets the current or named session's run. The field name `run_state` appears both on the box (`GrokBotBoxState`) and on the sandbox, so runs and boxes are correlated. |
-| **Account slot** | `Ko = "host"` (`JB:4047`); `I$ = {accountSlot: p(), clientNonce: p(), …}`; `recordSendEcho({accountSlot: Ko, clientNonce})` (`JB:39819`) | `PROVEN`: there is a single well-known account slot value, `"host"`, used by the coordinator when reporting its own sends. `INFERRED`: multi-account is anticipated (`accountSlot` is a string, not a boolean), but the desktop coordinator runs only the `host` slot. |
+| **Account slot** | `Ko = "host"` (`JB:4046`); `I$ = {accountSlot: p(), clientNonce: p(), …}`; `recordSendEcho({accountSlot: Ko, clientNonce})` (`JB:39818`) | `PROVEN`: there is a single well-known account slot value, `"host"`, used by the coordinator when reporting its own sends. `INFERRED`: multi-account is anticipated (`accountSlot` is a string, not a boolean), but the desktop coordinator runs only the `host` slot. |
 
 ### 5.8 Identifier summary
 
@@ -2493,7 +2507,7 @@ descriptor list contains a full admin surface (`Admin*`, 40+ messages), a team s
 
 | Identifier | Type | Scope | Validated how |
 |---|---|---|---|
-| `agentId` / `id` (agent) | string | global, stable | `q()` → `iF()`: non-empty, trimmed, no `/` `\` NUL, not `.`/`..` (`JB:407-421`, `33696-33701`) |
+| `agentId` / `id` (agent) | string | global, stable | `q()` → `iF()`: non-empty, trimmed, no `/` `\` NUL, not `.`/`..` (`JB:406-421`, `33696-33701`) |
 | `legacy_agent_id` | string | migration alias | none observed |
 | `sessionId` | string | per agent | `A(p())` — plain optional string at the RPC boundary (`PROVEN`: **not** shape-validated) |
 | `generation` | uint32 | per `(agent, session)` | int32-range check elsewhere; on the wire it is a number |
@@ -2545,7 +2559,7 @@ camelCased projection of the corresponding `aiserver.v1` request message. `PROVE
 (20 fields) differs by more than case (`prompt`, `directAddressedAcceptance`, `clientNonce`,
 `supportsTemporalHarness` are local-only; `message_id`, `sent_at_ms` are backend-only).
 
-`respondToWidget`'s reply container is `record-or-null` (`W2`, `JB:36859`) and the backend response is
+`respondToWidget`'s reply container is `record-or-null` (`W2`, `JB:36858`) and the backend response is
 `RespondGrokBotWidgetResponse {accepted: bool, refusal?: <enum>}` — i.e. **resolution can be refused**,
 which is why the client container allows `null`. `PROVEN`.
 
@@ -2554,28 +2568,28 @@ which is why the client container allows `null`. `PROVEN`.
 Four resolution vocabularies are recoverable as literals, and they are distinct per card type:
 
 ```js
-LE = ["approved", "denied"],                                   // JB:4049
-ba = ["approved", "denied", "always"],                         // JB:4050  (auto-review approval)
-UE = ["allowed", "skipped", "always_this_bot", "always_all_team_bots"],  // JB:4051 (connector grant)
-ka = ["up", "down", "submit", "revert"],                       // JB:4053  (feedback action)
+LE = ["approved", "denied"],                                   // JB:4048
+ba = ["approved", "denied", "always"],                         // JB:4049  (auto-review approval)
+UE = ["allowed", "skipped", "always_this_bot", "always_all_team_bots"],  // JB:4050 (connector grant)
+ka = ["up", "down", "submit", "revert"],                       // JB:4054  (feedback action)
 ```
 
 `PROVEN`. Bindings, `PROVEN` by the schema expressions that reference them:
 
-* `resolution: _e("approval resolution", ba)` — `resolveAutoReviewApproval` (`JB:34177`).
+* `resolution: _e("approval resolution", ba)` — `resolveAutoReviewApproval` (`JB:34176`).
 * `resolution: _e("connector grant resolution", UE)` — `resolveConnectorGrant`, via
-  `gw = kU(_e("connector grant resolution", UE))` (`JB:34010`, `kU` at `JB:33934`).
+  `gw = kU(_e("connector grant resolution", UE))` (`JB:34009`, `kU` at `JB:34005`).
 * `resolution: r` — `resolveLocalToolPermission`, via `fw = kU(j$)` where
-  `j$ = dt("local tool permission resolution", aa)` (`JB:33927` region, `JB:34009`). `aa` was **not**
+  `j$ = dt("local tool permission resolution", aa)` (`JB:33926` region, `JB:34008`). `aa` was **not**
   located as a literal array in the bundle. `UNKNOWN`: the local-tool-permission resolution values.
-* `action: _e("feedback action", ka)` — `voteFeedback` (`JB:34241`).
+* `action: _e("feedback action", ka)` — `voteFeedback` (`JB:34240`).
 
 `INFERRED` from the vocabularies: an auto-review approval can be made **sticky** (`"always"`), and a
 connector grant can be made sticky **per bot** (`"always_this_bot"`) or **per team** (`"always_all_team_bots"`).
 That is the whole "stop asking me" design, and `"always_all_team_bots"` shows the grant scope is a
 team, not a user. `INFERRED` (strong: the string literals are self-describing).
 
-A fifth, distinct taxonomy is the **draft payload** union `$n` (`JB:4085-4103`), `PROVEN`:
+A fifth, distinct taxonomy is the **draft payload** union `$n` (`JB:4062-4080`), `PROVEN`:
 
 ```js
 $n(r) = r.type === "email-draft"          ? {from: string, to: string[], cc?: string[],
@@ -2612,20 +2626,20 @@ plus a `person`-class terminal call. The proven instances:
 
 `PROVEN` for names, classes and arg fields. Corroborating literals:
 
-* `dO = ["get", "create"]` (`JB:2721`) is the WebAuthn **ceremony kind** enum, and
+* `dO = ["get", "create"]` (`JB:2724`) is the WebAuthn **ceremony kind** enum, and
   `requestWebAuthnCeremony`'s arg is `kind` — so `requestWebAuthnCeremony {kind:"get"|"create"}`
   requests a passkey assertion or attestation. `PROVEN`.
 * `v$ = w({kind: N$, origin: p(), optionsJson: p()})` where `N$ = _e("ceremony kind", dO)`
-  (`JB:33922-33923`) is the full ceremony request shape passed to the main process, which then runs
+  (`JB:33921-33923`) is the full ceremony request shape passed to the main process, which then runs
   the native `sand-webauthn-signer` (`FINDINGS.md:25`). `PROVEN`.
 * `jq = rO("kind", [ Bt({kind: st("ceremony"), requestId: ut(), ceremony: Bt({kind: Jn([st("get"),
-  st("create")]), origin: ut(), optionsJson: ut()})}), … ])` (`JB:2724+`) is a **second, zod-style
+  st("create")]), origin: ut(), optionsJson: ut()})}), … ])` (`JB:2725+`) is a **second, zod-style
   schema** for the same ceremony, used at the main-process boundary. `PROVEN` existence; the two
   schemas (dune and zod) describe the same payload — `INFERRED`: an artifact of the payload crossing a
   package boundary between a dune-typed module and a zod-typed one.
 * the coordinator's own WebAuthn endpoints are `aO = "/webauthn/requests"` and
   `iO = "/webauthn/responses"` (`JB:2719-2720`), with a poll cadence `RE = 1e4` (10 s),
-  `zq = 3e4` (30 s), `lO = Math.ceil(zq / RE)` (`JB:2722-2724`). `PROVEN`.
+  `zq = 3e4` (30 s), `lO = Math.ceil(zq / RE)` (`JB:2721-2724`). `PROVEN`.
 
 **Lifecycle, reconstructed (`INFERRED`, with the proven anchors named):**
 
@@ -2646,18 +2660,18 @@ agent / automation needs a capability it cannot get unattended
         │      • resolution ∈ approved|denied|always | allowed|skipped|always_this_bot|always_all_team_bots
         │      • the card is updated in place; the awaiting call settles
         │      • `expired` is a proven terminal status for a local-tool-permission ask
-        │        (predicate KO, JB:4092-4093)
+        │        (predicate KO, JB:4091-4092)
         │
         └─▶ cancelX {requestId}                      [background]
                • abandon; only legal while nobody has resolved it
 ```
 
 The proof that this is a *watched* rather than *polled* flow is the event-family set: `tray`,
-`messages-grants`, and `agent-activity` are all client-facing families (`JB:36833`, `36842`, `36846`),
+`messages-grants`, and `agent-activity` are all client-facing families (`JB:36832`, `36842`, `36846`),
 and the coordinator starts each ceremony's poll only after a `request`: `const l = e.claim ?? sj` …
-(`main-app.beauty.js:54302`, `54316`) — the resumable "claim" pattern appears twice, and the MCP OAuth
+(`main-app.beauty.js:54301`, `54316`) — the resumable "claim" pattern appears twice, and the MCP OAuth
 loopback uses a *foreign-claim* backoff `ld({name: "sand-mcp-oauth-loopback-foreign-claim",
-intervalMs: 250})` (`main-app.beauty.js:55187`), showing concurrent-claim handling is a first-class
+intervalMs: 250})` (`main-app.beauty.js:55186`), showing concurrent-claim handling is a first-class
 concern. `PROVEN` for the literals; `INFERRED` for the sequencing.
 
 ### 6.4 Interrupt
@@ -2700,25 +2714,25 @@ The single most important distinction in this dossier. `PROVEN` throughout.
 
 Plane B is the one most easily mistaken for "the backend". It is reached with a **per-box bearer token
 minted by the backend and stamped on the box**, and its base URL is classified `loopback` or
-`pod_proxy` (`JB:35458`). Plane C is reached with the *user's* session and is entirely separate.
+`pod_proxy` (`JB:35457`). Plane C is reached with the *user's* session and is entirely separate.
 
 ### 7.2 Plane C — backend host and env overrides
 
 | Literal | Location | Note |
 |---|---|---|
-| `"https://api2.cursor.sh"` | `main-app.beauty.js:545`, `28456`; `main-core.beauty.js:25887`; `preload.beauty.js:4110` (`Iu = "api2.cursor.sh"`) | default backend |
-| `"api2.cursor.sh"` | `coordinator.beauty.js:36704` (`G2`) | used only as a DNS-lookup target for the "independent lookup" diagnostic (`JB:36801`) |
-| `"https://api2.cursor.sh/updates"` | `main-core.beauty.js:27521` (`JU`) | update feed |
-| `CURSOR_API_BASE_URL` | `main-app.beauty.js:28456` | `U4(e) = cxe(e ?? process.env.CURSOR_API_BASE_URL ?? "https://api2.cursor.sh")` |
-| `CURSOR_WEBSITE_URL` | `main-app.beauty.js:28454` | `dxe(e) = cxe(e ?? process.env.CURSOR_WEBSITE_URL ?? "https://cursor.com")` |
+| `"https://api2.cursor.sh"` | `main-app.beauty.js:544`, `28456`; `main-core.beauty.js:25886`; `preload.beauty.js:4109` (`Iu = "api2.cursor.sh"`) | default backend |
+| `"api2.cursor.sh"` | `node-agent-node-agent-coordinator.beauty.js:36703` (`G2`) | used only as a DNS-lookup target for the "independent lookup" diagnostic (`JB:36800`) |
+| `"https://api2.cursor.sh/updates"` | `main-core.beauty.js:27520` (`JU`) | update feed |
+| `CURSOR_API_BASE_URL` | `main-app.beauty.js:28455` | `U4(e) = cxe(e ?? process.env.CURSOR_API_BASE_URL ?? "https://api2.cursor.sh")` |
+| `CURSOR_WEBSITE_URL` | `main-app.beauty.js:28453` | `dxe(e) = cxe(e ?? process.env.CURSOR_WEBSITE_URL ?? "https://cursor.com")` |
 | `SAND_BACKEND_URL` | `preload.beauty.js:4112` | checked **before** `CURSOR_API_BASE_URL` |
-| `SAND_HOST_GATEWAY_URL` / `_TOKEN` / `_NETWORK_TOKEN` | `main-core.beauty.js:26246-26250` | plane-B overrides |
-| `SAND_DISABLE_SEND_ACCEPT_RETURN` | `coordinator.beauty.js:4047` (`qO`) | send-accept behaviour toggle |
-| `SAND_DISABLE_SLIM_AVATARS` | `JB:27360` region, consumed at `39892` | disables `x-sand-slim-avatars` |
-| `SAND_DEV_BOX_CONTAINER`, `SAND_DEV_*` | `main-core.beauty.js:26236-26240` | dev-box plumbing |
-| `NODE_USE_SYSTEM_CA_ENV=1` | `main-app.beauty.js:91564` | forced into the coordinator's env |
+| `SAND_HOST_GATEWAY_URL` / `_TOKEN` / `_NETWORK_TOKEN` | `main-core.beauty.js:26245-26250` | plane-B overrides |
+| `SAND_DISABLE_SEND_ACCEPT_RETURN` | `node-agent-node-agent-coordinator.beauty.js:4046` (`qO`) | send-accept behaviour toggle |
+| `SAND_DISABLE_SLIM_AVATARS` | `39947` (read site), consumed at `JB:39947` | disables `x-sand-slim-avatars` |
+| `SAND_DEV_BOX_CONTAINER`, `SAND_DEV_*` | `main-core.beauty.js:26235-26240` | dev-box plumbing |
+| `NODE_USE_SYSTEM_CA_ENV=1` | `main-app.beauty.js:91563` | forced into the coordinator's env |
 
-`PROVEN`. The **production-backend check** is exposed to the renderer, `preload.beauty.js:4111-4113`:
+`PROVEN`. The **production-backend check** is exposed to the renderer, `preload.beauty.js:4110-4113`:
 
 ```js
 function Nu() {
@@ -2727,7 +2741,7 @@ function Nu() {
 }
 ```
 
-exposed as `desktop.environment.usesProductionBackend` (`preload.beauty.js:4115-4124`). `PROVEN`: the
+exposed as `desktop.environment.usesProductionBackend` (`preload.beauty.js:4114-4124`). `PROVEN`: the
 client can tell whether it is pointed at the real backend, which matters for the dev-login guard
 below.
 
@@ -2737,13 +2751,13 @@ Only four connectrpc method paths exist as literals across the bundles:
 
 | Path | Location | Surface |
 |---|---|---|
-| `/aiserver.v1.GrokBotService/VoiceCallHarnessSession` | `main-app.beauty.js:35778` (`pU`) | voice-call harness stream |
-| `/aiserver.v1.GrokBotService/VoiceCallHarnessTool` | `main-app.beauty.js:35779` (`fU`) | voice-call tool channel |
-| `/aiserver.v1.SCMService/BatchGetPullRequestStatus` | `main-app.beauty.js:29922` (`kMe`) | PR status |
-| `/scmapi.v0.ScmService/BatchGetPullRequestStatus` | `main-app.beauty.js:29923` (`X$t`) | the same call on the older service |
-| `/aiserver.v1.AnalyticsService/BootstrapStatsig` | `main-app.beauty.js:52216` | feature-flag bootstrap |
+| `/aiserver.v1.GrokBotService/VoiceCallHarnessSession` | `main-app.beauty.js:35777` (`pU`) | voice-call harness stream |
+| `/aiserver.v1.GrokBotService/VoiceCallHarnessTool` | `main-app.beauty.js:35778` (`fU`) | voice-call tool channel |
+| `/aiserver.v1.SCMService/BatchGetPullRequestStatus` | `main-app.beauty.js:29921` (`kMe`) | PR status |
+| `/scmapi.v0.ScmService/BatchGetPullRequestStatus` | `main-app.beauty.js:29922` (`X$t`) | the same call on the older service |
+| `/aiserver.v1.AnalyticsService/BootstrapStatsig` | `main-app.beauty.js:52215` | feature-flag bootstrap |
 
-`PROVEN` for all five literals. Context that makes the PR pair legible (`main-app.beauty.js:29924-29925`):
+`PROVEN` for all five literals. Context that makes the PR pair legible (`main-app.beauty.js:29923-29925`):
 
 ```js
 (eqt = new Set(["unavailable", "unimplemented"])),
@@ -2756,7 +2770,7 @@ set). `INFERRED`: a service migration in progress. A self-hosted host can treat 
 as *optional* — it is a handful of auxiliary calls, not the agent-driving path.
 
 The ConnectRPC runtime is bundled in the main process (prolific `ConnectError` construction in
-`main-app.beauty.js:12021-13022` with `Code.InvalidArgument`/`ResourceExhausted`/`DeadlineExceeded`
+`main-app.beauty.js:12020-13022` with `Code.InvalidArgument`/`ResourceExhausted`/`DeadlineExceeded`
 /`Internal`/`Unimplemented` mappings, envelope framing and compression checks). `PROVEN` that
 `@connectrpc/connect` (as `FINDINGS.md:21` records) is present and used for plane C. `UNKNOWN`: the
 full list of generated service clients, because the descriptor table for services is not in the
@@ -2765,8 +2779,8 @@ extracted literal set.
 ### 7.4 The `/v1/*` paths are **deep-link routes**, not backend endpoints
 
 This is a correction to the received framing. All seventeen `/v1/*` literals live inside one
-**URL-route declaration** in `main-core.beauty.js:18278-18325`. The `path`-building helper `_a` is
-`PROVEN` at `main-core.beauty.js:18198-18205`:
+**URL-route declaration** in `main-core.beauty.js:18274-18325`. The `path`-building helper `_a` is
+`PROVEN` at `main-core.beauty.js:18197-18205`:
 
 ```js
 var Ll = /^[A-Za-z0-9_-]{21}$/;
@@ -2820,21 +2834,21 @@ out-of-band is married to the ceremony that started it.
 
 | Path | Location | Shape (`PROVEN` literals) |
 |---|---|---|
-| `/auth/poll` | `main-app.beauty.js:28765` | `GET`-style poll with `?uuid=&verifier=`; `403` carries `{error}`; `404` resets the retry counter; `3` consecutive failures raise `iL` |
-| `/oauth/token` | `main-app.beauty.js:31867` | `POST` JSON `{client_id, grant_type:"refresh_token", refresh_token}` under a deadline |
-| `/auth/logout` | `main-app.beauty.js:31625` | `POST` with `authorization: Bearer <token>` |
-| `/oauth/return` | `main-app.beauty.js:472`, `exec-daemon.beauty.js:3015` | OAuth return leg |
-| `/auth/cursor_dev_session_token` | `main-core.beauty.js:25851` | dev-login; `?plan=&trial=&email=`; **refuses non-dev backends**: `if (!oU(r)) throw new Lc(\`refusing dev-login against non-dev backend ${r.protocol}//${r.host}\`)` |
-| `/webauthn/requests`, `/webauthn/responses` | `coordinator.beauty.js:2719-2720` | WebAuthn proxy relay |
-| `/sand/feedback` | `main-app.beauty.js:87295` | feedback submission |
-| `/sand/link` | `main-core.beauty.js:18202` | listed as an `httpsPathPrefix` for deep links |
+| `/auth/poll` | `main-app.beauty.js:28764` | `GET`-style poll with `?uuid=&verifier=`; `403` carries `{error}`; `404` resets the retry counter; `3` consecutive failures raise `iL` |
+| `/oauth/token` | `main-app.beauty.js:31866` | `POST` JSON `{client_id, grant_type:"refresh_token", refresh_token}` under a deadline |
+| `/auth/logout` | `main-app.beauty.js:31624` | `POST` with `authorization: Bearer <token>` |
+| `/oauth/return` | `main-app.beauty.js:471`, `local-exec-daemon.beauty.js:3015` | OAuth return leg |
+| `/auth/cursor_dev_session_token` | `main-core.beauty.js:25850` | dev-login; `?plan=&trial=&email=`; **refuses non-dev backends**: `if (!oU(r)) throw new Lc(\`refusing dev-login against non-dev backend ${r.protocol}//${r.host}\`)` |
+| `/webauthn/requests`, `/webauthn/responses` | `node-agent-node-agent-coordinator.beauty.js:2718-2720` | WebAuthn proxy relay |
+| `/sand/feedback` | `main-app.beauty.js:87294` | feedback submission |
+| `/sand/link` | `main-core.beauty.js:18201` | listed as an `httpsPathPrefix` for deep links |
 
 `PROVEN`. Additional `PROVEN` auth-flow details:
 
-* login begins by **opening a browser** at `${websiteUrl}/loginDeepControl?challenge=…&uuid=…&mode=login&redirectTarget=sand&supportsSelectedTeamLogin=true` (`main-app.beauty.js:28755-28764`), i.e. an out-of-band browser login with a challenge/verifier pair, polled on plane C with `/auth/poll`.
-* session refresh distinguishes `shouldLogout` (terminal sign-out), an MDM policy refusal, and a rotation-race rescue — seeded source path `cursor-auth.ts runRefreshAccessToken` (`main-core.beauty.js:26710-26743`).
-* secure storage failure is non-fatal and *reported*: `sessionSecretsUnavailable` — "OS secure storage is unavailable, so the signed-in session's Cursor tokens are held in memory only and will not survive a restart" (`main-core.beauty.js:26746-26752`). `PROVEN`.
-* token storage is `OS secure storage` via Electron `safeStorage`, with `SAND_SIMULATE_SECURE_STORAGE_UNAVAILABLE=1` as a test hook (`main-core.beauty.js:26251`). `PROVEN`.
+* login begins by **opening a browser** at `${websiteUrl}/loginDeepControl?challenge=…&uuid=…&mode=login&redirectTarget=sand&supportsSelectedTeamLogin=true` (`main-app.beauty.js:28754-28764`), i.e. an out-of-band browser login with a challenge/verifier pair, polled on plane C with `/auth/poll`.
+* session refresh distinguishes `shouldLogout` (terminal sign-out), an MDM policy refusal, and a rotation-race rescue — seeded source path `cursor-auth.ts runRefreshAccessToken` (`main-core.beauty.js:26709-26743`).
+* secure storage failure is non-fatal and *reported*: `sessionSecretsUnavailable` — "OS secure storage is unavailable, so the signed-in session's Cursor tokens are held in memory only and will not survive a restart" (`main-core.beauty.js:26745-26752`). `PROVEN`.
+* token storage is `OS secure storage` via Electron `safeStorage`, with `SAND_SIMULATE_SECURE_STORAGE_UNAVAILABLE=1` as a test hook (`main-core.beauty.js:26253`). `PROVEN`.
 
 ### 7.6 Plane B — what the box gateway contract is, in full
 
@@ -3000,7 +3014,7 @@ should become checkable. `INFERRED` recommendations:
    `kU`-shaped resolutions carry a `requestId`; message-grants resolution carries **only** a
    `requestId` (`PROVEN`, §6.1). A host should verify that the `requestId` is a live pending request
    created by *this* host, that it has not been resolved, and that the resolver is entitled to resolve
-   it. The vendor's `"expired"` ask status (`JB:4093`) shows expiry is a modelled state to copy.
+   it. The vendor's `"expired"` ask status (`JB:4091`) shows expiry is a modelled state to copy.
 5. **Cursor invalidation must be authoritative.** `GrokBotTranscriptWatchCursorTooOld` exists; a host
    should return it whenever a cursor cannot be satisfied, rather than silently returning a partial
    window — silently dropping rows is the failure mode that makes transcripts untrustworthy.
@@ -3031,7 +3045,7 @@ policy    : background = no wake, no mutation; person = may wake, may mutate;
 ### 9.1 What could not be resolved, and why
 
 1. **`assertTrustedRequester` implementation.** `PROVEN` to exist and to be the first statement of the
-   `sand:coordinator-port-request` handler (`main-app.beauty.js:85238`); its body was not located in
+   `sand:coordinator-port-request` handler (`main-app.beauty.js:85237`); its body was not located in
    the beautified main-app during this pass. `UNKNOWN`: whether it checks
    `senderFrame.url`, `webContents.id` membership, or both. This is the **only** access-control step in
    the discovery path, so it is the most important unresolved item in §1. *Why*: the handler is
@@ -3070,10 +3084,10 @@ policy    : background = no wake, no mutation; person = may wake, may mutate;
    actually constructed at runtime, and whether the full descriptor list corresponds to the current
    backend version. `INFERRED`: at least the transcript, agent, box, plugin and marketplace families
    are live (their field names are consumed by coordinator code, e.g. `F({payload: _.agents})` for
-   roster payloads at `JB:39839`).
+   roster payloads at `JB:39915`).
 9. **`Nx`, `$2`, `wk`, `hte`-adjacent constants, and several schema variables.** A handful of
    identifiers are referenced but their declarations were not located within the search budget:
-   `Nx` (spread into the out-of-line entry-kind set, `JB:31027`), parts of `$2` (event-family
+   `Nx` (spread into the out-of-line entry-kind set, `JB:31026`), parts of `$2` (event-family
    aliases, partially recovered), and `aa`. Each is flagged where it appears rather than guessed.
 10. **Whether the mobile client actually speaks this protocol.** `PROVEN` that the desktop renderer
     does, and `PROVEN` that 40 of the 172 methods are never referenced by any desktop renderer asset

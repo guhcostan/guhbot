@@ -21,8 +21,14 @@ export interface OpenAiCompatibleOptions {
   baseUrl: string;
   apiKey?: string | undefined;
   defaultModel?: string;
-  /** Extra headers, e.g. for a gateway that requires a routing header. */
-  headers?: Record<string, string>;
+  /**
+   * Extra headers. May be a function, which is called per request.
+   *
+   * Some gateways require a per-request routing header (a session id, a trace
+   * id). Making this a function keeps that concern in configuration rather than
+   * teaching the adapter about any particular vendor.
+   */
+  headers?: Record<string, string> | (() => Record<string, string>);
   /** Override for tests. Defaults to global fetch. */
   fetchImpl?: typeof fetch;
 }
@@ -109,10 +115,11 @@ export class OpenAiCompatibleProvider implements ModelProvider {
 
   async *stream(request: ModelRequest): AsyncGenerator<ModelEvent> {
     const url = `${this.options.baseUrl.replace(/\/+$/, '')}/chat/completions`;
+    const extra = typeof this.options.headers === 'function' ? this.options.headers() : this.options.headers;
     const headers: Record<string, string> = {
       'content-type': 'application/json',
       accept: 'text/event-stream',
-      ...this.options.headers,
+      ...extra,
     };
     if (this.options.apiKey) headers['authorization'] = `Bearer ${this.options.apiKey}`;
 
