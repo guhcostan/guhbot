@@ -4,8 +4,31 @@
     "rootDir": "src",
     "outDir": "dist",
     "tsBuildInfoFile": "dist/.tsbuildinfo",
-    "types": ["node"]
+    "types": [
+      "node"
+    ]
   },
-  "include": ["src/**/*.ts"],
-  "references": [{ "path": "../protocol" }, { "path": "../host-core" }, { "path": "../agent" }]
+  "include": [
+    "src/**/*.ts"
+  ],
+  "references": [
+    {
+      "path": "../agent"
+    },
+    {
+      "path": "../browser"
+    },
+    {
+      "path": "../host-core"
+    },
+    {
+      "path": "../mcp"
+    },
+    {
+      "path": "../messages"
+    },
+    {
+      "path": "../protocol"
+    }
+  ]
 }

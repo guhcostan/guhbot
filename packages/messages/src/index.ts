@@ -24,6 +24,10 @@ import { buildMessagesTools, type MessagesToolRuntime } from './tools.js';
  *    throws at construction.
  */
 
+export type { AppleScriptRunResult, AppleScriptService } from './applescript.js';
+export type { AttachmentView, ConversationView, MessageView } from './chat-db.js';
+export type { MessagesCapabilityOptions, AppleScriptRunner } from './options.js';
+
 export interface MessagesCapability extends Capability {
   /** Why this capability is inert, or null when it is active. */
   readonly reason: string | null;

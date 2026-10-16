@@ -2,13 +2,22 @@
   "files": [],
   "references": [
     {
-      "path": "packages/protocol"
+      "path": "packages/agent"
+    },
+    {
+      "path": "packages/browser"
     },
     {
       "path": "packages/host-core"
     },
     {
-      "path": "packages/agent"
+      "path": "packages/mcp"
+    },
+    {
+      "path": "packages/messages"
+    },
+    {
+      "path": "packages/protocol"
     }
   ]
 }

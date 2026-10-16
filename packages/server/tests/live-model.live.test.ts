@@ -217,26 +217,51 @@ describe.skipIf(credentials === null)('live model', () => {
   );
 
   it(
-    'completes a file-writing task with a tool call, and the file is real',
+    'makes a tool call real: an approved write reaches disk',
     async () => {
       const { host, server, port, workspace } = await stack();
-      const { mkdirSync, readFileSync } = await import('node:fs');
+      const { mkdirSync, readFileSync, existsSync } = await import('node:fs');
       mkdirSync(workspace, { recursive: true });
 
-      const { final, entries } = await runToCompletion(
-        host,
-        server,
-        port,
-        'Create a file named report.txt in the working directory whose entire contents are exactly: status=ok',
-        'Writer',
-      );
+      /**
+       * A live model is not deterministic: asked to write a file it will
+       * sometimes just answer, or ask a clarifying question, or narrate what it
+       * would do. That is model behaviour, not a bug in this host.
+       *
+       * So the assertion is the invariant that must hold regardless of what the
+       * model chooses: **if the model called the write tool, the bytes are on
+       * disk**. And across a few attempts, a model that is asked directly should
+       * eventually comply, so we also require that at least one attempt did call
+       * it. A plumbing failure fails both.
+       */
+      let sawToolCall = false;
+      let fileContents: string | null = null;
 
-      expect(final.status).toBe('succeeded');
-      expect(entries.some((e) => e.kind === 'tool-call' && e.toolName === 'write_file')).toBe(true);
+      for (let attempt = 1; attempt <= 3 && fileContents === null; attempt += 1) {
+        const { final, entries } = await runToCompletion(
+          host,
+          server,
+          port,
+          'Use the write_file tool to create a file named report.txt in the working directory. ' +
+            'The entire contents of the file must be exactly this one line: status=ok. ' +
+            'Call the tool; do not just describe it.',
+          `Writer${attempt}`,
+        );
 
-      // The model asked; the loop approved; the bytes are on disk.
-      const written = readFileSync(join(workspace, 'report.txt'), 'utf8');
-      expect(written).toContain('status=ok');
+        expect(final.status).toBe('succeeded');
+
+        const calledWrite = entries.some((e) => e.kind === 'tool-call' && e.toolName === 'write_file');
+        if (calledWrite) {
+          sawToolCall = true;
+          // The model claimed to write. The host must have made that real, and
+          // the approval gate must have let it through.
+          expect(existsSync(join(workspace, 'report.txt'))).toBe(true);
+          fileContents = readFileSync(join(workspace, 'report.txt'), 'utf8');
+        }
+      }
+
+      expect(sawToolCall).toBe(true);
+      expect(fileContents).toContain('status=ok');
       await server.close();
       await host.close();
     },

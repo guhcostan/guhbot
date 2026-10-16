@@ -17,7 +17,8 @@
     "dev:host": "pnpm --filter @guhbot/server dev",
     "dev:desktop": "pnpm --filter @guhbot/desktop dev",
     "dev:mobile": "pnpm --filter @guhbot/mobile start",
-    "clean": "rm -rf packages/*/dist apps/*/dist node_modules/.cache"
+    "clean": "rm -rf packages/*/dist apps/*/dist node_modules/.cache",
+    "test:live": "pnpm -r --filter \"./packages/**\" build && vitest run --config vitest.live.config.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

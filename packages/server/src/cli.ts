@@ -19,6 +19,8 @@ import { join } from 'node:path';
 import { AgentLoop, OpenAiCompatibleProvider, builtinTools } from '@guhbot/agent';
 import { Host, hashToken, newToken } from '@guhbot/host-core';
 import { HostServer, localAddresses } from './server.js';
+import { mountCapabilities } from './capabilities.js';
+import type { McpServerConfig } from '@guhbot/mcp';
 
 const VERSION = '0.1.0';
 
@@ -68,6 +70,29 @@ async function ensureOperatorToken(host: Host, dataDir: string): Promise<string>
   return token;
 }
 
+/**
+ * Read an MCP configuration file.
+ *
+ * Accepts the shape every MCP client uses (`{"mcpServers": {...}}`) and a bare
+ * array, because that is what people paste. A malformed file is fatal: silently
+ * starting with no MCP servers when the user asked for some is worse than
+ * refusing to start.
+ */
+function readMcpConfig(path: string): McpServerConfig[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(readFileSync(path, 'utf8'));
+  } catch (error) {
+    throw new Error(`could not read MCP config at ${path}: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  if (Array.isArray(parsed)) return parsed as McpServerConfig[];
+  const named = (parsed as { mcpServers?: Record<string, unknown> }).mcpServers;
+  if (named !== undefined && typeof named === 'object') {
+    return Object.entries(named).map(([name, entry]) => ({ name, ...(entry as object) })) as McpServerConfig[];
+  }
+  throw new Error(`MCP config at ${path} has neither an array nor an "mcpServers" object`);
+}
+
 async function main(): Promise<void> {
   const { values } = parseArgs({
     options: {
@@ -80,6 +105,11 @@ async function main(): Promise<void> {
       'allowed-hosts': { type: 'string' },
       'session-header': { type: 'string' },
       workspace: { type: 'string' },
+      'browser-hosts': { type: 'string' },
+      'search-url': { type: 'string' },
+      'mcp-config': { type: 'string' },
+      'mcp-allow-stdio': { type: 'boolean', default: false },
+      'messages-allow': { type: 'string' },
       mode: { type: 'string', default: 'self-hosted' },
       help: { type: 'boolean', default: false },
     },
@@ -103,6 +133,12 @@ async function main(): Promise<void> {
         '                         request. Some gateways refuse requests without one.',
         '  --workspace <path>     Directory agents may read and write. Defaults to',
         '                         <data-dir>/workspace, NOT the current directory.',
+        '  --browser-hosts <csv>  Hosts the browser may navigate to. Empty disables',
+        '                         the browser capability entirely (no egress).',
+        '  --search-url <tpl>     Search endpoint containing {query}, for browser_search.',
+        '  --mcp-config <path>    JSON file of MCP servers ({"mcpServers":{...}}).',
+        '  --mcp-allow-stdio      Permit MCP servers that spawn local processes.',
+        '  --messages-allow <csv> iMessage chats/handles this host may read and send to.',
         '  --mode <m>             self-hosted | hosted (default self-hosted)',
         '',
       ].join('\n'),
@@ -120,6 +156,21 @@ async function main(): Promise<void> {
   const allowedHosts = (values['allowed-hosts'] ?? '').split(',').map((h) => h.trim()).filter((h) => h.length > 0);
   const sessionHeader = values['session-header'];
   const workspace = values.workspace ?? join(dataDir, 'workspace');
+  const browserHosts = (values['browser-hosts'] ?? '').split(',').map((h) => h.trim()).filter((h) => h.length > 0);
+  const messagesAllow = (values['messages-allow'] ?? '').split(',').map((h) => h.trim()).filter((h) => h.length > 0);
+
+  const mcpServers = values['mcp-config'] !== undefined ? readMcpConfig(values['mcp-config']) : [];
+  const mounted = await mountCapabilities({
+    dataDir,
+    allowedHosts,
+    searchUrlTemplate: values['search-url'],
+    browser: { enabled: browserHosts.length > 0 },
+    mcp: { allowStdio: values['mcp-allow-stdio'], servers: mcpServers },
+    messages: { allowed: messagesAllow },
+  });
+  // The browser shares the egress list with http_fetch, so a host that allows
+  // one allows the other; `--allowed-hosts` alone is enough for both.
+  const egressHosts = allowedHosts.length > 0 ? allowedHosts : browserHosts;
 
   // A host without a provider still works: it serves transcripts and settings,
   // and reports inferenceReady: false so clients can explain why runs fail.
@@ -136,7 +187,7 @@ async function main(): Promise<void> {
               ? { headers: () => ({ [sessionHeader]: randomUUID() }) }
               : {}),
           }),
-          tools: builtinTools({ allowedHosts }),
+          tools: [...builtinTools({ allowedHosts: egressHosts }), ...mounted.tools],
           // Defaulting to the current directory would hand an agent whatever
           // repository you happened to launch the host from, node_modules and
           // all. A dedicated workspace is the safe default; pointing it at a
@@ -152,13 +203,16 @@ async function main(): Promise<void> {
     capabilities: {
       exec: true,
       filesystem: true,
+      // Defaults, then whatever the mounted capabilities actually declare wins.
       browser: false,
       voice: false,
-      messages: process.platform === 'darwin',
+      messages: false,
       vnc: false,
-      egress: allowedHosts.length > 0,
+      egress: egressHosts.length > 0,
+      ...mounted.flags,
     },
     ...(executor ? { executor } : {}),
+    ...(Object.keys(mounted.extraMethods).length > 0 ? { extraMethods: mounted.extraMethods } : {}),
   });
 
   mkdirSync(workspace, { recursive: true });
@@ -188,10 +242,15 @@ async function main(): Promise<void> {
       `  inference     ${status.inferenceReady ? `ready (${model ?? 'provider default'})` : 'NOT CONFIGURED — set --base-url and --model'}`,
       `  reachable     ${values.lan ? 'from your network (LAN mode)' : 'from this machine only'}`,
       `  workspace     ${workspace}`,
+      `  capabilities  ${mounted.mounted.length > 0 ? mounted.mounted.join(', ') : 'none beyond built-in tools'}`,
       `  operator      ${join(dataDir, 'operator.token')}  (0600, person class)`,
       '',
     ].join('\n'),
   );
+
+  for (const note of mounted.notes) {
+    process.stdout.write(`  note          ${note}\n`);
+  }
 
   if (!values.lan) {
     process.stdout.write(
@@ -206,6 +265,7 @@ async function main(): Promise<void> {
     process.stdout.write(`\n  ${signal} received, shutting down.\n`);
     await server.close();
     await host.close(signal);
+    await mounted.dispose();
     process.exit(0);
   };
   process.on('SIGINT', () => void shutdown('SIGINT'));

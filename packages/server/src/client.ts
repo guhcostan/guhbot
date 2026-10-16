@@ -221,10 +221,20 @@ export class GuhbotClient {
   /**
    * Call a host method.
    *
-   * Typed end-to-end from the shared registry, so a client cannot call a method
-   * that does not exist or pass the wrong shape without a compile error.
+   * Two overloads, deliberately. The first is typed end to end from the core
+   * registry, so a client cannot call a core method that does not exist or pass
+   * the wrong shape without a compile error. The second accepts any string, so
+   * a capability can contribute methods without the protocol package having to
+   * know about every capability — the alternative would be a registry that grows
+   * a dependency on each one.
+   *
+   * A capability method is validated on the host against the schemas it declared
+   * when it was contributed, so the looser client signature costs nothing at the
+   * boundary that matters.
    */
-  request<M extends MethodName>(method: M, params: MethodInput<M>, timeoutMs = 120_000): Promise<MethodOutput<M>> {
+  request<M extends MethodName>(method: M, params: MethodInput<M>, timeoutMs?: number): Promise<MethodOutput<M>>;
+  request(method: string, params?: unknown, timeoutMs?: number): Promise<unknown>;
+  request(method: string, params?: unknown, timeoutMs = 120_000): Promise<unknown> {
     const socket = this.socket;
     if (!socket || this.state !== 'ready') {
       return Promise.reject({ code: 'cancelled', message: 'client is not connected', retryable: true } satisfies RpcError);
@@ -232,23 +242,21 @@ export class GuhbotClient {
     this.seq += 1;
     const id = `r${this.seq}`;
 
-    return new Promise<MethodOutput<M>>((resolve, reject) => {
+    return new Promise<unknown>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
         reject({ code: 'internal', message: `${method} timed out after ${timeoutMs}ms`, retryable: true } satisfies RpcError);
       }, timeoutMs);
 
-      this.pending.set(id, {
-        resolve: resolve as (value: unknown) => void,
-        reject,
-        timer,
-      });
+      this.pending.set(id, { resolve, reject, timer });
       socket.send(encodeFrame({ t: 'req', id, method, params }));
     });
   }
 
   /** Fire a request without caring about the result. */
-  notify<M extends MethodName>(method: M, params: MethodInput<M>): void {
+  notify<M extends MethodName>(method: M, params: MethodInput<M>): void;
+  notify(method: string, params?: unknown): void;
+  notify(method: string, params?: unknown): void {
     const socket = this.socket;
     if (!socket || this.state !== 'ready') return;
     this.seq += 1;

@@ -9,4 +9,6 @@
 export { HostServer, localAddresses } from './server.js';
 export type { HostServerOptions, PairingInfo } from './server.js';
 export { GuhbotClient } from './client.js';
+export { mountCapabilities } from './capabilities.js';
+export type { CapabilityMountConfig, MountedCapabilities } from './capabilities.js';
 export type { ClientState, GuhbotClientOptions } from './client.js';

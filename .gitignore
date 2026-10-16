@@ -13,3 +13,6 @@ build/
 !.env.example
 coverage/
 *.log
+
+# Website dev artifacts
+website/.waitlist-dev.json

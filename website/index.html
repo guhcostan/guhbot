@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>guhbot — the agent host you can leave running</title>
+    <meta
+      name="description"
+      content="An open-source agent host that runs on your computer. Agents do real work with your files and your tools, your phone can watch and approve, and nothing reaches the network unless you allowed it."
+    />
+    <meta name="color-scheme" content="dark" />
+    <meta property="og:title" content="guhbot — the agent host you can leave running" />
+    <meta
+      property="og:description"
+      content="Open-source agent host. Runs on your machine. Every operation is classified by whether it needs a human present."
+    />
+    <meta property="og:type" content="website" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230b0d10'/%3E%3Cpath d='M9 22V10h3.2v4.6h7.6V10H23v12h-3.2v-4.7h-7.6V22z' fill='%2367e8a2'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+
+    <header class="nav">
+      <div class="wrap nav-inner">
+        <a class="brand" href="/">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <span class="brand-name">guhbot</span>
+        </a>
+        <nav class="nav-links" aria-label="Main">
+          <a href="#how">How it works</a>
+          <a href="#safety">Safety</a>
+          <a href="#run">Run it</a>
+          <a href="https://github.com/guhcostan/guhbot" rel="noopener">GitHub</a>
+        </nav>
+        <a class="btn btn-sm" href="#waitlist">Join the waitlist</a>
+      </div>
+    </header>
+
+    <main id="main">
+      <!-- Hero ------------------------------------------------------------ -->
+      <section class="hero">
+        <div class="wrap">
+          <p class="eyebrow">Open source · Apache-2.0 · Runs on your machine</p>
+          <h1>
+            Give an agent real work.<br />
+            Then actually leave the house.
+          </h1>
+          <p class="lede">
+            guhbot is an agent host you run yourself. It reads your files, runs commands, browses
+            the web and messages from your phone — and every single operation it can perform is
+            classified by whether it needs a human present.
+          </p>
+          <div class="cta">
+            <a class="btn btn-primary" href="https://github.com/guhcostan/guhbot" rel="noopener">Get the code</a>
+            <a class="btn" href="#waitlist">Hosted version — join the waitlist</a>
+          </div>
+          <p class="fineprint">
+            No account. No vendor backend. Bring your own model key, or point it at a box on your LAN.
+          </p>
+
+          <div class="terminal" role="img" aria-label="A terminal session starting the host and running a task">
+            <div class="terminal-bar"><span></span><span></span><span></span></div>
+            <pre><code><span class="c-dim">$</span> guhbot-host --lan --base-url https://opencode.ai/zen/go/v1 --model deepseek-v4.1-flash
+
+  guhbot host 0.1.0  (self-hosted)
+  listening     http://192.168.1.20:8787
+  inference     ready (deepseek-v4.1-flash)
+  workspace     ~/.guhbot/workspace
+  capabilities  browser, mcp
+  operator      ~/.guhbot/operator.token  (0600, person class)
+
+<span class="c-dim"># a phone pairs, and can only ever join as `background`</span>
+<span class="c-green">✓</span> paired: iPhone (background) — 1 device, 0 with presence
+
+<span class="c-dim"># the agent works; anything that spends or sends waits for a human</span>
+  run (Sales Analyst) → running
+  <span class="c-amber">⏸</span> approval: Run write_file?
+  run → succeeded
+
+<span class="c-dim"># what it wrote is on your disk, not in someone's cloud</span>
+  $ cat ~/.guhbot/workspace/summary.txt
+  total=443</code></pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- The problem ------------------------------------------------------ -->
+      <section class="band">
+        <div class="wrap narrow">
+          <h2>An always-on agent is a loaded gun pointed at your accounts</h2>
+          <p>
+            Everyone is shipping agents that log into your tools and act for you. That is genuinely
+            useful, and it is also a new kind of risk: you are handing a program your sessions, your
+            inbox, and your ability to spend money. Then you make it reachable from your phone, so
+            that anything reachable from the phone is reachable by whoever holds the phone.
+          </p>
+          <p>
+            Most products answer this with a terms-of-service paragraph. We answered it in the
+            architecture, and the architecture is the part you can read.
+          </p>
+        </div>
+      </section>
+
+      <!-- The model -------------------------------------------------------- -->
+      <section class="band" id="how">
+        <div class="wrap">
+          <h2>Two classes of operation. That is the whole idea.</h2>
+          <p class="section-lede">
+            Every method the host exposes is declared as one of two things, and the host enforces
+            which one you may call. Not a client check. Not a setting.
+          </p>
+
+          <div class="split">
+            <article class="card card-person">
+              <h3><code>person</code></h3>
+              <p class="card-count">Needs a human present</p>
+              <ul>
+                <li>Send a prompt, start a run</li>
+                <li>Resolve an approval</li>
+                <li>Write or replace a secret</li>
+                <li>Create, change or delete an agent</li>
+              </ul>
+              <p class="card-note">
+                A phone that paired over the network is <strong>always</strong> the other class. It
+                cannot promote itself, and there is no flag that would let it.
+              </p>
+            </article>
+
+            <article class="card card-background">
+              <h3><code>background</code></h3>
+              <p class="card-count">Safe with nobody watching</p>
+              <ul>
+                <li>Read the transcript</li>
+                <li>Check host status and health</li>
+                <li>List tools and capabilities</li>
+                <li>See what is waiting on you</li>
+              </ul>
+              <p class="card-note">
+                This is what lets an agent work overnight while your phone stays a window rather
+                than a loaded credential.
+              </p>
+            </article>
+          </div>
+
+          <p class="callout">
+            A stolen phone can read your transcripts. It cannot send a message as you, spend a
+            dollar, or approve its own request.
+          </p>
+        </div>
+      </section>
+
+      <!-- Capabilities ----------------------------------------------------- -->
+      <section class="band">
+        <div class="wrap">
+          <h2>What an agent can actually do</h2>
+          <p class="section-lede">
+            Each capability is a package with its own tests and its own refusal paths. Nothing is on
+            by default unless the thing it needs has been configured.
+          </p>
+          <div class="grid">
+            <article class="feature">
+              <h3>Files and commands</h3>
+              <p>
+                Reads and writes inside one workspace, never outside it. Paths are checked after
+                resolution, so <code>..</code> and symlinks do not escape. Commands run without a
+                shell, and a child process never inherits your API keys.
+              </p>
+              <p class="tag tag-on">on by default</p>
+            </article>
+
+            <article class="feature">
+              <h3>Browser and search</h3>
+              <p>
+                Drives a real Chromium with its own throwaway profile. Egress is denied unless you
+                name the hosts — and the check runs on every request, every redirect hop, and the
+                final URL. No cookies are ever exposed to the model.
+              </p>
+              <p class="tag">off until you allow hosts</p>
+            </article>
+
+            <article class="feature">
+              <h3>MCP tools</h3>
+              <p>
+                stdio, HTTP and SSE. Tool names are namespaced per server so one server cannot
+                impersonate another's tools. A stdio server spawns local code, so it needs an
+                explicit opt-in.
+              </p>
+              <p class="tag">off until you configure a server</p>
+            </article>
+
+            <article class="feature">
+              <h3>macOS Messages</h3>
+              <p>
+                Reads only conversations you listed, one read-only handle, never a copy of the
+                database. Sending always requires approval, and there is no option to turn that off.
+              </p>
+              <p class="tag">off until you name chats</p>
+            </article>
+
+            <article class="feature">
+              <h3>Secrets that stay put</h3>
+              <p>
+                Sealed with AES-256-GCM under a key file that is <code>0600</code>. Tool execution
+                can read a value; the wire cannot. There is deliberately no <code>secrets.get</code>
+                anywhere in the protocol.
+              </p>
+              <p class="tag tag-on">built in</p>
+            </article>
+
+            <article class="feature">
+              <h3>Many agents, one thread</h3>
+              <p>
+                Agents are long-lived identities with their own instructions and transcript. Group
+                them so they hand work to each other while you watch, instead of approving every
+                step.
+              </p>
+              <p class="tag tag-on">built in</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <!-- Safety receipts -------------------------------------------------- -->
+      <section class="band" id="safety">
+        <div class="wrap">
+          <h2>Claims you can check</h2>
+          <p class="section-lede">
+            Each of these is a test in the repository, not a promise in a document. If you can break
+            one, that is a security report.
+          </p>
+          <div class="receipts">
+            <div class="receipt"><code>person</code><span>A background device cannot resolve an approval</span></div>
+            <div class="receipt"><code>pairing</code><span>A paired device joins as background even when it asks for person</span></div>
+            <div class="receipt"><code>secrets</code><span>A value never appears in any protocol response</span></div>
+            <div class="receipt"><code>jail</code><span>A model-supplied path cannot escape the workspace, symlinks included</span></div>
+            <div class="receipt"><code>shell</code><span>Commands run with no shell, so metacharacters stay literal</span></div>
+            <div class="receipt"><code>egress</code><span>An empty allow list means nothing is reachable at all</span></div>
+            <div class="receipt"><code>plugins</code><span>A capability cannot shadow a core method</span></div>
+            <div class="receipt"><code>boot</code><span>Runs left in flight by a crash are failed, never left running</span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Run it ----------------------------------------------------------- -->
+      <section class="band" id="run">
+        <div class="wrap">
+          <h2>Your laptop, or ours</h2>
+          <div class="split split-run">
+            <article class="run-card">
+              <h3>Self-hosted</h3>
+              <p class="run-price">Free, forever</p>
+              <p>
+                One command. Your files, your tools, your credentials and your transcripts never
+                leave the machine. The agent keeps working with the lid open and comes back when
+                something needs you.
+              </p>
+              <pre class="snippet"><code>git clone https://github.com/guhcostan/guhbot
+cd guhbot &amp;&amp; pnpm install &amp;&amp; pnpm build
+node packages/server/dist/cli.js --data-dir ~/.guhbot</code></pre>
+              <a class="btn" href="https://github.com/guhcostan/guhbot" rel="noopener">Read the code</a>
+            </article>
+
+            <article class="run-card run-card-soon">
+              <h3>Hosted</h3>
+              <p class="run-price">Not yet — waitlist open</p>
+              <p>
+                For when you want agents working around the clock and your laptop closed. Same
+                runtime, same protocol, one isolated host per account. We are not selling it yet
+                because there is no billing, and we would rather say so than take a card we cannot
+                charge.
+              </p>
+              <div class="status-row">
+                <span class="dot dot-amber"></span>
+                <span>Service disabled while we finish it</span>
+              </div>
+              <a class="btn" href="#waitlist">Join the waitlist</a>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <!-- Waitlist --------------------------------------------------------- -->
+      <section class="band band-last" id="waitlist">
+        <div class="wrap narrow">
+          <h2>Want the hosted version?</h2>
+          <p>
+            Leave an address and we will tell you when it is ready. One email, when there is
+            something real to say. No newsletter, no drip sequence.
+          </p>
+
+          <!-- data-endpoint is what main.js posts to; a deployment overrides it. -->
+          <form
+            class="waitlist"
+            id="waitlist-form"
+            data-endpoint="/api/waitlist"
+            novalidate
+          >
+            <label class="sr-only" for="email">Email address</label>
+            <input
+              id="email"
+              name="email"
+              type="email"
+              inputmode="email"
+              autocomplete="email"
+              placeholder="you@example.com"
+              required
+              aria-describedby="waitlist-status"
+            />
+            <button class="btn btn-primary" type="submit">Join the waitlist</button>
+          </form>
+          <p class="form-status" id="waitlist-status" role="status" aria-live="polite"></p>
+          <p class="fineprint fineprint-left">
+            We store the address and the date, and nothing else. Ask us to delete it and it is gone.
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="wrap footer-inner">
+        <div>
+          <span class="brand-name">guhbot</span>
+          <p class="footer-note">Open-source agent host. Apache-2.0.</p>
+        </div>
+        <nav class="footer-links" aria-label="Footer">
+          <a href="https://github.com/guhcostan/guhbot" rel="noopener">GitHub</a>
+          <a href="https://github.com/guhcostan/guhbot/blob/main/SECURITY.md" rel="noopener">Security</a>
+          <a href="https://github.com/guhcostan/guhbot/blob/main/LICENSE" rel="noopener">License</a>
+          <a href="mailto:hello@guhbot.dev">Contact</a>
+        </nav>
+      </div>
+    </footer>
+
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>

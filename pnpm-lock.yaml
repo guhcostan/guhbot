@@ -213,9 +213,18 @@ importers:
       '@guhbot/agent':
         specifier: workspace:*
         version: link:../agent
+      '@guhbot/browser':
+        specifier: workspace:*
+        version: link:../browser
       '@guhbot/host-core':
         specifier: workspace:*
         version: link:../host-core
+      '@guhbot/mcp':
+        specifier: workspace:*
+        version: link:../mcp
+      '@guhbot/messages':
+        specifier: workspace:*
+        version: link:../messages
       '@guhbot/protocol':
         specifier: workspace:*
         version: link:../protocol

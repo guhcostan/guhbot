@@ -36,7 +36,7 @@ export class SseTransport implements McpTransport {
   private readonly pending: PendingRequests;
   private readonly streamController = new AbortController();
   private endpoint: URL | null = null;
-  private endpointWaiters: { resolve: () => void; reject: (error: Error) => void }[] = [];
+  private endpointWaiters: { resolve: () => void; reject: (error: Error) => void; timer: NodeJS.Timeout }[] = [];
   private streamTask: Promise<void> | null = null;
   private closed = false;
 
@@ -102,16 +102,12 @@ export class SseTransport implements McpTransport {
   private async waitForEndpoint(timeoutMs: number): Promise<void> {
     if (this.endpoint) return;
     await new Promise<void>((resolve, reject) => {
-      const onReady = (): void => {
-        clearTimeout(timer);
-        resolve();
-      };
       const timer = setTimeout(() => {
-        this.endpointWaiters = this.endpointWaiters.filter((waiter) => waiter.resolve !== onReady);
+        this.endpointWaiters = this.endpointWaiters.filter((waiter) => waiter.timer !== timer);
         reject(new McpError('protocol', `MCP server "${this.options.serverName}" never sent an SSE endpoint event`));
       }, timeoutMs);
       timer.unref?.();
-      this.endpointWaiters.push({ resolve: onReady, reject });
+      this.endpointWaiters.push({ resolve, reject, timer });
     });
   }
 
@@ -119,6 +115,7 @@ export class SseTransport implements McpTransport {
     const waiters = this.endpointWaiters;
     this.endpointWaiters = [];
     for (const waiter of waiters) {
+      clearTimeout(waiter.timer);
       if (error) waiter.reject(error);
       else waiter.resolve();
     }
@@ -189,14 +186,20 @@ export class SseTransport implements McpTransport {
     if (!endpoint || this.closed) {
       throw new McpError('closed', `MCP server "${this.options.serverName}" has no SSE endpoint yet (${method})`);
     }
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: { ...(this.options.headers ?? {}), 'content-type': 'application/json' },
-      body: encodeMessage(message),
-      // Closing the session aborts an in-flight POST too.
-      signal: this.streamController.signal,
-      redirect: 'error',
-    });
+    let response: Response;
+    try {
+      response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { ...(this.options.headers ?? {}), 'content-type': 'application/json' },
+        body: encodeMessage(message),
+        // Closing the session aborts an in-flight POST too.
+        signal: this.streamController.signal,
+        redirect: 'error',
+      });
+    } catch (error) {
+      if (this.closed) throw new McpError('closed', `MCP server "${this.options.serverName}" was shut down`);
+      throw new McpError('http', `MCP request ${method} to "${this.options.serverName}" failed: ${errorMessage(error)}`);
+    }
     if (!response.ok) {
       throw new McpError('http', `MCP server "${this.options.serverName}" answered ${response.status} for ${method}`);
     }

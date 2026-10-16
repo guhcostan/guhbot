@@ -14,7 +14,7 @@ import { EgressRefusedError, PlaywrightEngine } from './engine.js';
 import { LIMITS } from './limits.js';
 import type { BrowserPaths } from './paths.js';
 import { browserPaths, resolveScreenshotPath } from './paths.js';
-import { navigationRefusal, parseAllowEntry } from './policy.js';
+import { BLANK_PAGE_URL, navigationRefusal, parseAllowEntry } from './policy.js';
 import type { FormatOptions } from './snapshot.js';
 import {
   formatActionResult,
@@ -189,7 +189,8 @@ export class BrowserSession {
   }
 
   private formatOptions(maxBytes?: number): FormatOptions {
-    return { maxBytes: maxBytes === undefined ? this.options.maxTextBytes : Math.min(maxBytes, LIMITS.maxTextBytesCeiling), maxElements: this.options.maxElements };
+    const budget = maxBytes === undefined ? this.options.maxTextBytes : Math.min(maxBytes, LIMITS.maxTextBytesCeiling);
+    return { maxBytes: budget, maxElements: this.options.maxElements };
   }
 
   /**
@@ -202,6 +203,20 @@ export class BrowserSession {
   private assertAllowed(url: string): void {
     const refusal = navigationRefusal(url, this.options.allowedHosts);
     if (refusal !== null) throw new EgressRefusedError(`refused: ${refusal}`);
+  }
+
+  /**
+   * The check for a URL the browser is already sitting on.
+   *
+   * The blank page is legal to *be* on and illegal to navigate *to*, so it gets
+   * its own sentence rather than the scheme refusal: a model that reads before it
+   * opens should be told what to do, not told that `about:` is forbidden.
+   */
+  private assertPageAllowed(url: string): void {
+    if (url === BLANK_PAGE_URL) {
+      throw new Error('the browser has no page open yet; call browser_open with an allowed URL first');
+    }
+    this.assertAllowed(url);
   }
 
   private async bound<T>(label: string, call: SessionCall, work: () => Promise<T>): Promise<T> {
@@ -250,7 +265,7 @@ export class BrowserSession {
       const page = await engine.read(this.budget(selector, maxBytes));
       // A page can redirect itself after the load event; the URL that matters is
       // the one the text was extracted from.
-      this.assertAllowed(page.url);
+      this.assertPageAllowed(page.url);
       return page;
     });
     this.lastSnapshot = snapshot;
@@ -263,7 +278,7 @@ export class BrowserSession {
   ): Promise<string> {
     const engine = this.ensureEngine();
     const current = engine.status().currentUrl;
-    if (current !== null) this.assertAllowed(current);
+    if (current !== null) this.assertPageAllowed(current);
 
     const path = await resolveScreenshotPath(this.options.paths.screenshotDir, request.name);
     const result: ScreenshotResult = await this.bound('browser_screenshot', call, () =>
@@ -285,7 +300,7 @@ export class BrowserSession {
         timeoutMs: this.options.navigationTimeoutMs,
       }),
     );
-    this.assertAllowed(action.url);
+    this.assertPageAllowed(action.url);
     return formatActionResult(action.url, action.navigated, this.actionNote(action));
   }
 
@@ -303,7 +318,7 @@ export class BrowserSession {
         timeoutMs: this.options.navigationTimeoutMs,
       }),
     );
-    this.assertAllowed(action.url);
+    this.assertPageAllowed(action.url);
     return formatActionResult(action.url, action.navigated, this.actionNote(action));
   }
 
@@ -336,13 +351,22 @@ export class BrowserSession {
 
   /** Close the browser but keep the capability usable: the next call relaunches. */
   async close(): Promise<string> {
-    if (this.engine === null) {
+    const engine = this.engine;
+    if (engine === null) {
       return 'The browser was already closed; there is no live session.';
     }
-    const engine = this.engine;
     this.engine = null;
     this.lastSnapshot = null;
-    await engine.close().catch(() => undefined);
+    try {
+      // Bounded: a browser that will not close must not hold the tool call open,
+      // and it is not reused either way.
+      await withDeadline(() => engine.close().catch(() => undefined), {
+        timeoutMs: this.options.callTimeoutMs,
+        label: 'browser_close',
+      });
+    } catch {
+      // Nothing to recover: the session already let go of the engine.
+    }
     return 'Browser session closed. The next browser tool call starts a new one.';
   }
 

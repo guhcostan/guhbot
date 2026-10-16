@@ -47,7 +47,17 @@ export interface Capability {
   readonly summary: string;
   /** Merged into `host.status.capabilities`. Keep keys stable; clients read them. */
   readonly flags?: Record<string, boolean>;
-  /** Tools contributed to every agent run. Called once at host start. */
+  /**
+   * Prepare the capability before its contributions are read.
+   *
+   * Some capabilities cannot declare their tools until they have talked to
+   * something: MCP has to connect to each server and ask what it offers. Without
+   * this hook the first `tools()` call would return an empty list and the tools
+   * would silently only appear later, which reads as "MCP is broken".
+   */
+  readonly ready?: () => Promise<void>;
+
+  /** Tools contributed to every agent run. Called after `ready` has resolved. */
   readonly tools?: () => ToolDefinition[];
   /**
    * RPC methods contributed to the host. Each entry must also be reachable by
@@ -95,6 +105,28 @@ export function assertCapability(capability: Capability): void {
         `capability ${capability.name} tool ${tool.name} must state requiresApproval explicitly — ` +
           'a tool that mutates anything outside the host needs a human in the loop',
       );
+    }
+  }
+}
+
+/**
+ * Resolve every capability's `ready()` before its contributions are read.
+ *
+ * Sequential rather than concurrent: a capability that spawns child processes
+ * (MCP over stdio) is easier to reason about, and to cancel, one at a time.
+ * Failures are isolated — one unreachable MCP server must not stop the host from
+ * starting with the capabilities that do work.
+ */
+export async function prepareCapabilities(
+  capabilities: Capability[],
+  onError?: (capability: string, error: unknown) => void,
+): Promise<void> {
+  for (const capability of capabilities) {
+    if (!capability.ready) continue;
+    try {
+      await capability.ready();
+    } catch (error) {
+      onError?.(capability.name, error);
     }
   }
 }

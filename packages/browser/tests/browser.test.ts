@@ -589,6 +589,19 @@ describe('redirect enforcement', () => {
     await expect(session.read(null, undefined, CONTEXT)).rejects.toThrow(/tracker.test is not in the browser allow list/);
   });
 
+  it('tells the model to open a page instead of refusing about:blank', async () => {
+    const engine = new ScriptedEngine();
+    engine.finalUrl = 'about:blank';
+    const session = sessionWith(engine);
+
+    await expect(session.read(null, undefined, CONTEXT)).rejects.toThrow(/no page open yet; call browser_open/);
+    await expect(session.click({ target: { kind: 'ref', ref: 1 }, button: 'left' }, CONTEXT)).rejects.toThrow(
+      /no page open yet/,
+    );
+    // about:blank is still not a legal target for browser_open itself.
+    await expect(session.open('about:blank', CONTEXT)).rejects.toThrow(/refused/);
+  });
+
   it('re-checks the URL after a click', async () => {
     const engine = new ScriptedEngine();
     const session = sessionWith(engine);
