@@ -12,7 +12,7 @@ classified by whether it needs a human present.
 [![Tests](https://img.shields.io/badge/tests-386%20passing-67e8a2?style=flat-square)](#testing)
 [![Node](https://img.shields.io/badge/node-%E2%89%A522.5-339933?style=flat-square&logo=nodedotjs&logoColor=white)](#quick-start)
 
-[Website](https://guhbot.dev) · [Security](SECURITY.md) · [Architecture](docs/architecture.md) · [Reverse-engineering dossier](docs/re/00-index.md)
+[Website](https://d1490grrgfw1sj.cloudfront.net) · [Security](SECURITY.md) · [Architecture](docs/architecture.md) · [Reverse-engineering dossier](docs/re/00-index.md)
 
 </div>
 
@@ -70,7 +70,7 @@ Nothing reaches the network unless you configured what it may reach.
 | Canvas and artifacts | ❌ | Not built |
 | Voice | ❌ | Not built |
 | Remote desktop | ❌ | Not built |
-| Hosted service | ⚠️ | Gateway, tenant isolation and waitlist are built; **not for sale** (no billing yet) |
+| Hosted service | ⚠️ | Gateway, tenant isolation and waitlist are built and deployed; **not for sale** (no billing yet) |
 
 ## Quick start
 
@@ -227,6 +227,21 @@ The most useful thing the study produced was the `person` / `background`
 distinction. Reusing those names here was a design decision, not a copy: the
 reference uses them for a different mechanism, and
 [docs/re/00-index.md](docs/re/00-index.md) says so explicitly.
+
+## The hosted service
+
+The site and the waitlist are deployed and live at
+**[d1490grrgfw1sj.cloudfront.net](https://d1490grrgfw1sj.cloudfront.net)**. A
+private S3 bucket behind CloudFront, one Lambda, one DynamoDB table, and no
+always-on server, because there is nothing yet that needs one.
+
+**It is not for sale, and there is no billing.** Leaving an address adds it to the
+waitlist and nothing else. We are finding out whether anyone wants this before
+building the part that takes money, rather than the other way round.
+
+The hosted *agent* service (one isolated host per account) is built and tested but
+deliberately switched off: provisioning requires an operator token that is not
+configured in the deployment, so nobody can create a tenant on it yet.
 
 ## Contributing
 

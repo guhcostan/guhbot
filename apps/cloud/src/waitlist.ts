@@ -87,6 +87,31 @@ export interface WaitlistOptions {
   /** Cap on request body size, in bytes. Prevents a trivially large POST. */
   maxBodyBytes?: number;
   now?: () => Date;
+  /**
+   * Shared secret that CloudFront injects as `x-guhbot-origin`.
+   *
+   * A Function URL with `authType: NONE` is callable by anyone who learns the
+   * URL. The distribution is the only client that should reach this, so when a
+   * secret is configured a request without the matching header is refused
+   * outright. Left unset (local development, tests) the check is skipped.
+   */
+  originSecret?: string;
+}
+
+function headerValue(headers: Record<string, string | undefined> | undefined, name: string): string | null {
+  if (!headers) return null;
+  // HTTP headers are case-insensitive, and API Gateway does not normalise them.
+  for (const [key, value] of Object.entries(headers)) {
+    if (key.toLowerCase() === name && typeof value === 'string') return value;
+  }
+  return null;
+}
+
+function constantTimeEquals(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i += 1) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
 }
 
 /** Longest address that can legally exist is 254 bytes; anything longer is an attack or a typo. */
@@ -113,6 +138,14 @@ export function createWaitlistHandler(options: WaitlistOptions) {
       'access-control-allow-methods': 'POST, OPTIONS',
       'cache-control': 'no-store',
     };
+
+    if (options.originSecret !== undefined && options.originSecret.length > 0) {
+      const provided = headerValue(event.headers, 'x-guhbot-origin');
+      if (provided === null || !constantTimeEquals(provided, options.originSecret)) {
+        // 403, and no detail: a caller probing for the right value learns nothing.
+        return { statusCode: 403, headers, body: JSON.stringify({ error: 'forbidden' }) };
+      }
+    }
 
     const method = event.requestContext?.http?.method ?? event.httpMethod ?? 'POST';
 

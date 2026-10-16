@@ -98,6 +98,33 @@ describe('waitlist', () => {
     expect(seen[0]?.at).toBe('2026-01-02T03:04:05.000Z');
   });
 
+  it('refuses a request that did not come through the distribution', async () => {
+    const store = new MemoryWaitlistStore();
+    const handle = createWaitlistHandler({ store, originSecret: 'cf-secret-value' });
+
+    // No header: the raw Function URL being called directly.
+    const direct = await handle(post({ email: 'direct@example.com' }));
+    expect(direct.statusCode).toBe(403);
+    expect(store.size).toBe(0);
+
+    // Wrong header.
+    const wrong = await handle(post({ email: 'wrong@example.com' }, { headers: { 'x-guhbot-origin': 'nope' } }));
+    expect(wrong.statusCode).toBe(403);
+
+    // Correct header, and the casing does not matter because HTTP headers are
+    // case-insensitive and API Gateway does not normalise them.
+    const right = await handle(
+      post({ email: 'through-cloudfront@example.com' }, { headers: { 'X-Guhbot-Origin': 'cf-secret-value' } }),
+    );
+    expect(right.statusCode).toBe(200);
+    expect(store.size).toBe(1);
+  });
+
+  it('skips the origin check when no secret is configured, as in local development', async () => {
+    const handle = createWaitlistHandler({ store: new MemoryWaitlistStore() });
+    expect((await handle(post({ email: 'local@example.com' }))).statusCode).toBe(200);
+  });
+
   it('decodes a base64 body, which is how API Gateway delivers some requests', async () => {
     const handle = createWaitlistHandler({ store: new MemoryWaitlistStore() });
     const response = await handle({

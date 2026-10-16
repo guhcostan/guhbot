@@ -16,7 +16,9 @@
   "bin": {
     "guhbot-cloud": "./dist/cli.js"
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc -b",
     "typecheck": "tsc -b",
@@ -30,6 +32,7 @@
     "ws": "^8.18.0"
   },
   "devDependencies": {
-    "@types/ws": "^8.5.13"
+    "@types/ws": "^8.5.13",
+    "@aws-sdk/client-dynamodb": "^3.700.0"
   }
 }
