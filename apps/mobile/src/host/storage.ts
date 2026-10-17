@@ -41,19 +41,48 @@ export function parsePersistedHost(raw: string): PersistedHost | null {
   if (typeof parsed !== 'object' || parsed === null) return null;
 
   const record = parsed as Record<string, unknown>;
-  const host = typeof record['host'] === 'string' ? normalizeHost(record['host']) : null;
-  const port = typeof record['port'] === 'number' ? record['port'] : typeof record['port'] === 'string' ? parsePort(record['port']) : null;
-  if (host === null || port === null || !Number.isInteger(port) || port < 1 || port > 65535) return null;
+  const host =
+    typeof record['host'] === 'string' ? normalizeHost(record['host']) : null;
+  const port =
+    typeof record['port'] === 'number'
+      ? record['port']
+      : typeof record['port'] === 'string'
+        ? parsePort(record['port'])
+        : null;
+  if (
+    host === null ||
+    port === null ||
+    !Number.isInteger(port) ||
+    port < 1 ||
+    port > 65535
+  )
+    return null;
+
+  if (
+    record['path'] !== undefined &&
+    (typeof record['path'] !== 'string' ||
+      !/^\/(?:rpc|t\/t_[a-f0-9]{24}\/rpc)$/.test(record['path']))
+  )
+    return null;
 
   return {
     host,
     port,
+    ...(record['secure'] === true ? { secure: true } : {}),
+    ...(typeof record['path'] === 'string' &&
+    /^\/t\/t_[a-f0-9]{24}\/rpc$/.test(record['path'])
+      ? { path: record['path'] }
+      : {}),
     deviceId: typeof record['deviceId'] === 'string' ? record['deviceId'] : '',
-    deviceName: typeof record['deviceName'] === 'string' ? record['deviceName'] : '',
+    deviceName:
+      typeof record['deviceName'] === 'string' ? record['deviceName'] : '',
   };
 }
 
-export function createSessionStore(values: StringStore, secrets: StringStore): SessionStore {
+export function createSessionStore(
+  values: StringStore,
+  secrets: StringStore,
+): SessionStore {
   return {
     async loadHost(): Promise<PersistedHost | null> {
       const raw = await values.get(HOST_KEY);

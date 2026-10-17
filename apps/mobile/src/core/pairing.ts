@@ -88,5 +88,8 @@ export function parsePairingUri(raw: string): PairingLinkResult {
   const code = codeRaw.trim();
   if (!/^\d{8}$/.test(code)) return fail('The pairing code must be the 8 digits guhbot printed on the host.');
 
-  return { ok: true, link: { host, port, pairingId, code } };
+  const secure = params.get('secure') === '1';
+  const path = params.get('path');
+  if (path && !/^\/(?:rpc|t\/t_[a-f0-9]{24}\/rpc)$/.test(path)) return fail('The pairing link contains an invalid host path.');
+  return { ok: true, link: { host, port, pairingId, code, ...(secure ? { secure: true } : {}), ...(path ? { path } : {}) } };
 }

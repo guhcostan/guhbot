@@ -24,6 +24,6 @@ export function pairingMessage(error: unknown, endpoint: HostEndpoint): string {
 function unreachable(endpoint: HostEndpoint): string {
   return (
     `No answer from ${describeEndpoint(endpoint)}. Check that guhbot is running on that machine, ` +
-    'that it was started with LAN access, and that this phone is on the same network.'
+    'that the companion or secure proxy is running, and that this phone is on the same network or can reach the secure remote host.'
   );
 }

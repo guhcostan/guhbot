@@ -73,7 +73,7 @@ if (form instanceof HTMLFormElement) {
       const detail = error instanceof Error ? error.message : String(error);
       setStatus(
         'error',
-        `We could not reach the server (${detail}). Try again, or email hello@guhbot.dev and we will add you.`,
+        `We could not reach the server (${detail}). Please try again in a moment. Your address has not been added.`,
       );
     } finally {
       if (submit instanceof HTMLButtonElement) submit.disabled = false;

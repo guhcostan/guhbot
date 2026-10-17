@@ -3,6 +3,15 @@ import { describe, expect, it } from 'vitest';
 import { describeEndpoint, normalizeHost, parseEndpoint, parsePort, rpcUrl } from '../src/core/endpoint';
 
 describe('host addresses', () => {
+  it('supports a TLS host and tenant path without leaking credentials into its URL', () => {
+    const path = '/t/t_0123456789abcdef01234567/rpc';
+    const parsed = parseEndpoint(`wss://guh.example${path}`, '');
+    expect(parsed).toEqual({ ok: true, endpoint: { host: 'guh.example', port: 443, secure: true, path } });
+    if (parsed.ok) expect(rpcUrl(parsed.endpoint)).toBe(`wss://guh.example:443${path}`);
+    for (const raw of ['wss://user:secret@guh.example/rpc', 'wss://guh.example/rpc?token=secret', 'wss://guh.example/other']) {
+      expect(parseEndpoint(raw, '').ok).toBe(false);
+    }
+  });
   it('normalizes the forms a user can type', () => {
     expect(normalizeHost(' 192.168.1.20 ')).toBe('192.168.1.20');
     expect(normalizeHost('macbook.local')).toBe('macbook.local');

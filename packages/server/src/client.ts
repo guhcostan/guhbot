@@ -197,6 +197,14 @@ export class GuhbotClient {
     }
 
     if (frame.t === 'res') {
+      // Authentication failures have no request waiter. Dropping them would
+      // leave the client spinning forever with an invalid or revoked token.
+      if (frame.id === 'auth' && !frame.ok) {
+        const error = frame.error ?? { code: 'unauthenticated', message: 'host refused this device token', retryable: false };
+        this.options.onError?.(error);
+        void this.close();
+        return;
+      }
       const waiter = this.pending.get(frame.id);
       if (!waiter) return;
       this.pending.delete(frame.id);

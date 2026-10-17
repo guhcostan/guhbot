@@ -15,14 +15,22 @@
   },
   "dependencies": {
     "@guhbot/agent": "workspace:*",
+    "@guhbot/companion": "workspace:*",
+    "@guhbot/engine-cli": "workspace:*",
     "@guhbot/host-core": "workspace:*",
     "@guhbot/protocol": "workspace:*",
     "@guhbot/server": "workspace:*",
+    "lucide-react": "^1.58.0",
+    "motion": "^14.3.0",
+    "qrcode": "^1.5.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
     "@vitejs/plugin-react": "^4.3.4",

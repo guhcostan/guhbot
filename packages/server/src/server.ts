@@ -166,6 +166,13 @@ export class HostServer {
     const encoded = encodeFrame(frame);
     for (const [socket, session] of this.sockets) {
       if (socket.readyState !== socket.OPEN) continue;
+      if (session.device !== null) {
+        const current = this.host.store.getDevice(session.device.id);
+        if (current === null || current.revokedAt !== null) {
+          socket.close(1008, 'device revoked');
+          continue;
+        }
+      }
       if (authenticatedOnly && session.device === null && session.channel !== 'local') continue;
       socket.send(encoded);
     }

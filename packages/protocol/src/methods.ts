@@ -159,6 +159,13 @@ export const methods = {
     z.object({ /** Proof of local presence, e.g. a Touch ID gate on the host. */ localPresenceToken: z.string().max(4096) }),
     z.object({ device: DeviceSchema }),
     'Upgrade the calling device to `person` class using local presence on the host.',
+    true,
+  ),
+  'devices.setAccess': spec(
+    'person',
+    z.object({ deviceId: IdSchema, deviceClass: z.enum(['background', 'person']) }),
+    z.object({ device: DeviceSchema }),
+    'Explicitly grant or remove operator access for another paired device.',
   ),
 
   // -- Agents ---------------------------------------------------------------

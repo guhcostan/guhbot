@@ -7,11 +7,19 @@
  * request made moments ago.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { Agent, Approval, Entry, HostStatus, Run } from '@guhbot/protocol';
+import type {
+  Agent,
+  Approval,
+  Device,
+  Entry,
+  HostStatus,
+  Run,
+} from '@guhbot/protocol';
 import { GuhbotClient } from '@guhbot/server/client';
 
 export interface DesktopBridge {
   hostUrl: string;
+  phoneUrl?: string;
   token: string;
   platform: string;
   appVersion: string;
@@ -54,7 +62,26 @@ const EMPTY: HostState = {
 
 export interface HostApi {
   state: HostState;
+  connectionUrl: string | null;
   selectAgent: (agentId: string) => void;
+  createAgent: (
+    name: string,
+    instructions: string,
+    model: string,
+  ) => Promise<boolean>;
+  listDevices: () => Promise<Device[]>;
+  beginPairing: () => Promise<{
+    pairingId: string;
+    code: string;
+    expiresAt: string;
+  }>;
+  setDeviceAccess: (
+    deviceId: string,
+    deviceClass: 'person' | 'background',
+  ) => Promise<void>;
+  revokeDevice: (deviceId: string) => Promise<void>;
+  connectHost: (url: string, token: string) => void;
+  cancelRun: (runId: string) => Promise<void>;
   sendPrompt: (text: string) => Promise<void>;
   resolveApproval: (approvalId: string, granted: boolean) => Promise<void>;
 }
@@ -112,7 +139,10 @@ export function applyAppended(prev: HostState, payload: unknown): HostState {
   if (entry.agentId !== prev.activeAgentId) return prev;
   if (prev.entries.some((e) => e.id === entry.id)) return prev;
   const settled = prev.entries.filter((e) => e.id !== placeholderId(entry.seq));
-  return { ...prev, entries: [...settled, entry].sort((a, b) => a.seq - b.seq) };
+  return {
+    ...prev,
+    entries: [...settled, entry].sort((a, b) => a.seq - b.seq),
+  };
 }
 
 /** Fold one streamed text delta into the thread, creating a placeholder if needed. */
@@ -126,7 +156,11 @@ export function applyDelta(prev: HostState, payload: unknown): HostState {
     if (existing.id !== placeholderId(delta.seq)) return prev;
     return {
       ...prev,
-      entries: prev.entries.map((e) => (e.seq === delta.seq ? { ...e, content: e.content + delta.textDelta } : e)),
+      entries: prev.entries.map((e) =>
+        e.seq === delta.seq
+          ? { ...e, content: e.content + delta.textDelta }
+          : e,
+      ),
     };
   }
   const provisional: Entry = {
@@ -140,45 +174,72 @@ export function applyDelta(prev: HostState, payload: unknown): HostState {
     toolName: null,
     createdAt: new Date().toISOString(),
   };
-  return { ...prev, entries: [...prev.entries, provisional].sort((a, b) => a.seq - b.seq) };
+  return {
+    ...prev,
+    entries: [...prev.entries, provisional].sort((a, b) => a.seq - b.seq),
+  };
 }
 
 export function useHost(): HostApi {
   const [state, setState] = useState<HostState>(EMPTY);
   const clientRef = useRef<GuhbotClient | null>(null);
+  const [connection, setConnection] = useState<{
+    hostUrl: string;
+    token: string;
+  } | null>(null);
   const activeAgentRef = useRef<string | null>(null);
 
-  const refresh = useCallback(async (client: GuhbotClient, agentId: string | null) => {
-    try {
-      const [status, agents, approvals] = await Promise.all([
-        client.request('host.status', {}),
-        client.request('agents.list', {}),
-        client.request('approvals.list', { status: 'pending' }),
-      ]);
-      const target = agentId ?? agents.agents[0]?.id ?? null;
-      const entries = target ? (await client.request('transcript.tail', { agentId: target, limit: 80 })).entries : [];
-      activeAgentRef.current = target;
-      setState((prev) => ({
-        ...prev,
-        status: 'ready',
-        host: status,
-        agents: agents.agents,
-        approvals: approvals.approvals,
-        activeAgentId: target,
-        entries,
-        error: null,
-      }));
-    } catch (error) {
-      // A failed re-read is a renderable state, never an unhandled rejection:
-      // the error bar shows what happened and the next reconnect retries.
-      setState((prev) => ({ ...prev, error: errorMessage(error) }));
-    }
-  }, []);
+  const refresh = useCallback(
+    async (client: GuhbotClient, agentId: string | null) => {
+      try {
+        const [status, agents, approvals, recentRuns] = await Promise.all([
+          client.request('host.status', {}),
+          client.request('agents.list', {}),
+          client.request('approvals.list', { status: 'pending' }),
+          client.request('runs.list', { limit: 100 }),
+        ]);
+        const target = agentId ?? agents.agents[0]?.id ?? null;
+        const entries = target
+          ? (
+              await client.request('transcript.tail', {
+                agentId: target,
+                limit: 80,
+              })
+            ).entries
+          : [];
+        activeAgentRef.current = target;
+        setState((prev) => ({
+          ...prev,
+          status: 'ready',
+          host: status,
+          agents: agents.agents,
+          approvals: approvals.approvals,
+          runs: Object.fromEntries(recentRuns.runs.map((run) => [run.id, run])),
+          activeAgentId: target,
+          entries,
+          error: null,
+        }));
+      } catch (error) {
+        // A failed re-read is a renderable state, never an unhandled rejection:
+        // the error bar shows what happened and the next reconnect retries.
+        setState((prev) => ({ ...prev, error: errorMessage(error) }));
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
-    const bridge = window.guhbotDesktop;
-    if (!bridge || bridge.hostUrl.length === 0) {
-      setState((prev) => ({ ...prev, status: 'offline', error: 'The preload bridge did not provide a host URL.' }));
+    const bridge = connection ?? window.guhbotDesktop;
+    if (!bridge) {
+      setState((prev) => ({ ...prev, status: 'offline', error: null }));
+      return;
+    }
+    if (bridge.hostUrl.length === 0) {
+      setState((prev) => ({
+        ...prev,
+        status: 'offline',
+        error: 'The local host is unavailable. Connect to a host to continue.',
+      }));
       return;
     }
 
@@ -188,7 +249,13 @@ export function useHost(): HostApi {
       onError: (error) => {
         // A `forbidden` response is an expected state, not a failure: this device
         // simply is not allowed to do that. Surface it without tearing down.
-        setState((prev) => ({ ...prev, error: errorMessage(error) }));
+        setState((prev) => ({
+          ...prev,
+          ...('code' in error && error.code === 'unauthenticated'
+            ? { status: 'offline' as const }
+            : {}),
+          error: errorMessage(error),
+        }));
       },
     });
     clientRef.current = client;
@@ -207,17 +274,32 @@ export function useHost(): HostApi {
     client.on('transcript.delta', (payload) => {
       setState((prev) => applyDelta(prev, payload));
     });
+    client.on('agent.updated', (payload) => {
+      const { agent } = payload as { agent: Agent };
+      setState((prev) => ({
+        ...prev,
+        agents: prev.agents.some((a) => a.id === agent.id)
+          ? prev.agents.map((a) => (a.id === agent.id ? agent : a))
+          : [...prev.agents, agent],
+      }));
+    });
     client.on('run.updated', (payload) => {
       const { run } = payload as { run: Run };
       setState((prev) => ({ ...prev, runs: { ...prev.runs, [run.id]: run } }));
     });
     client.on('approval.requested', (payload) => {
       const { approval } = payload as { approval: Approval };
-      setState((prev) => ({ ...prev, approvals: [approval, ...prev.approvals] }));
+      setState((prev) => ({
+        ...prev,
+        approvals: [approval, ...prev.approvals],
+      }));
     });
     client.on('approval.resolved', (payload) => {
       const { approval } = payload as { approval: Approval };
-      setState((prev) => ({ ...prev, approvals: prev.approvals.filter((a) => a.id !== approval.id) }));
+      setState((prev) => ({
+        ...prev,
+        approvals: prev.approvals.filter((a) => a.id !== approval.id),
+      }));
     });
     client.on('agent.updated', (payload) => {
       const { agent } = payload as { agent: Agent };
@@ -243,53 +325,146 @@ export function useHost(): HostApi {
       void client.close();
       clientRef.current = null;
     };
-  }, [refresh]);
+  }, [refresh, connection]);
 
-  const selectAgent = useCallback(
-    (agentId: string) => {
-      activeAgentRef.current = agentId;
-      setState((prev) => ({ ...prev, activeAgentId: agentId, entries: [] }));
+  const selectAgent = useCallback((agentId: string) => {
+    activeAgentRef.current = agentId;
+    setState((prev) => ({ ...prev, activeAgentId: agentId, entries: [] }));
+    const client = clientRef.current;
+    if (client) {
+      void client
+        .request('transcript.tail', { agentId, limit: 80 })
+        .then((page) =>
+          setState((prev) =>
+            prev.activeAgentId === agentId
+              ? { ...prev, entries: page.entries }
+              : prev,
+          ),
+        )
+        .catch((error: unknown) => {
+          // A failed switch is a renderable state, not a silent swallow: the
+          // thread keeps its empty state honest and the error bar explains why.
+          setState((prev) => ({ ...prev, error: errorMessage(error) }));
+        });
+    }
+  }, []);
+
+  const sendPrompt = useCallback(async (text: string) => {
+    const client = clientRef.current;
+    const agentId = activeAgentRef.current;
+    if (!client || !agentId)
+      throw new Error('Select an agent and connect to a host first.');
+    try {
+      await client.request('runs.start', { agentId, prompt: text });
+    } catch (error) {
+      setState((prev) => ({ ...prev, error: errorMessage(error) }));
+      throw error;
+    }
+  }, []);
+
+  const resolveApproval = useCallback(
+    async (approvalId: string, granted: boolean) => {
       const client = clientRef.current;
-      if (client) {
-        void client
-          .request('transcript.tail', { agentId, limit: 80 })
-          .then((page) => setState((prev) => (prev.activeAgentId === agentId ? { ...prev, entries: page.entries } : prev)))
-          .catch((error: unknown) => {
-            // A failed switch is a renderable state, not a silent swallow: the
-            // thread keeps its empty state honest and the error bar explains why.
-            setState((prev) => ({ ...prev, error: errorMessage(error) }));
-          });
+      if (!client) return;
+      setState((prev) => ({ ...prev, resolvingApprovalId: approvalId }));
+      try {
+        await client.request('approvals.resolve', { approvalId, granted });
+      } catch (error) {
+        setState((prev) => ({ ...prev, error: errorMessage(error) }));
+      } finally {
+        setState((prev) => ({ ...prev, resolvingApprovalId: null }));
       }
     },
     [],
   );
 
-  const sendPrompt = useCallback(async (text: string) => {
-    const client = clientRef.current;
-    const agentId = activeAgentRef.current;
-    if (!client || !agentId) return;
-    try {
-      await client.request('runs.start', { agentId, prompt: text });
-    } catch (error) {
-      setState((prev) => ({ ...prev, error: errorMessage(error) }));
-    }
-  }, []);
-
-  const resolveApproval = useCallback(async (approvalId: string, granted: boolean) => {
-    const client = clientRef.current;
-    if (!client) return;
-    setState((prev) => ({ ...prev, resolvingApprovalId: approvalId }));
-    try {
-      await client.request('approvals.resolve', { approvalId, granted });
-    } catch (error) {
-      setState((prev) => ({ ...prev, error: errorMessage(error) }));
-    } finally {
-      setState((prev) => ({ ...prev, resolvingApprovalId: null }));
-    }
-  }, []);
-
-  return useMemo(
-    () => ({ state, selectAgent, sendPrompt, resolveApproval }),
-    [state, selectAgent, sendPrompt, resolveApproval],
+  const createAgent = useCallback(
+    async (name: string, instructions: string, model: string) => {
+      const client = clientRef.current;
+      if (!client) return false;
+      try {
+        const agent = await client.request('agents.create', {
+          name: name.trim(),
+          instructions,
+          ...(model.trim() ? { model: model.trim() } : {}),
+        });
+        await refresh(client, agent.id);
+        return true;
+      } catch (error) {
+        setState((prev) => ({ ...prev, error: errorMessage(error) }));
+        return false;
+      }
+    },
+    [refresh],
   );
+
+  const listDevices = useCallback(async () => {
+    const client = clientRef.current;
+    if (!client) throw new Error('Connect to a host first.');
+    return (await client.request('devices.list', {})).devices;
+  }, []);
+  const beginPairing = useCallback(async () => {
+    const client = clientRef.current;
+    if (!client) throw new Error('Connect to a host first.');
+    return client.request('pairing.beginForDevice', {});
+  }, []);
+  const setDeviceAccess = useCallback(
+    async (deviceId: string, deviceClass: 'person' | 'background') => {
+      await clientRef.current?.request('devices.setAccess', {
+        deviceId,
+        deviceClass,
+      });
+    },
+    [],
+  );
+  const revokeDevice = useCallback(async (deviceId: string) => {
+    await clientRef.current?.request('devices.revoke', { deviceId });
+  }, []);
+  const cancelRun = useCallback(async (runId: string) => {
+    try {
+      await clientRef.current?.request('runs.cancel', { runId });
+    } catch (error) {
+      setState((prev) => ({ ...prev, error: errorMessage(error) }));
+    }
+  }, []);
+  const connectHost = useCallback((url: string, token: string) => {
+    const parsed = new URL(url);
+    if (
+      !['ws:', 'wss:'].includes(parsed.protocol) ||
+      parsed.username ||
+      parsed.password ||
+      parsed.search ||
+      parsed.hash
+    )
+      throw new Error('Use a WebSocket URL without embedded credentials.');
+    if (
+      parsed.protocol === 'ws:' &&
+      !['localhost', '127.0.0.1', '[::1]'].includes(parsed.hostname)
+    )
+      throw new Error(
+        'Remote hosts require wss:// with a valid TLS certificate.',
+      );
+    setState(EMPTY);
+    activeAgentRef.current = null;
+    setConnection({ hostUrl: parsed.toString(), token });
+  }, []);
+
+  return {
+    state,
+    connectionUrl:
+      connection?.hostUrl ??
+      window.guhbotDesktop?.phoneUrl ??
+      window.guhbotDesktop?.hostUrl ??
+      null,
+    selectAgent,
+    sendPrompt,
+    resolveApproval,
+    createAgent,
+    listDevices,
+    beginPairing,
+    setDeviceAccess,
+    revokeDevice,
+    connectHost,
+    cancelRun,
+  };
 }

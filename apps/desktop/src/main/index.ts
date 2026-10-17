@@ -5,13 +5,19 @@
  * window pointed at it, and shut both down together. Any real logic lives in
  * `bootstrap.ts` so it can be tested without Electron.
  */
-import { app, BrowserWindow, ipcMain, shell } from 'electron';
-import { join, dirname } from 'node:path';
+import { app, BrowserWindow, ipcMain, shell, nativeTheme } from 'electron';
+import { join, dirname, delimiter } from 'node:path';
+import { mkdirSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { createCliEngines } from '@guhbot/engine-cli';
 import { fileURLToPath } from 'node:url';
 import { bootstrapHost, type BootstrapResult } from './bootstrap.js';
 
-const here = dirname(fileURLToPath(import.meta.url));
-const APP_VERSION = '0.1.0';
+const here =
+  typeof __dirname === 'string'
+    ? __dirname
+    : dirname(fileURLToPath(import.meta.url));
+const APP_VERSION = '0.2.0';
 
 let bootstrapped: BootstrapResult | null = null;
 let mainWindow: BrowserWindow | null = null;
@@ -30,7 +36,7 @@ function createWindow(): BrowserWindow {
     height: 860,
     minWidth: 720,
     minHeight: 520,
-    title: 'guhbot',
+    title: 'Guh Bot',
     backgroundColor: '#0b0d10',
     show: false,
     webPreferences: {
@@ -79,18 +85,60 @@ function createWindow(): BrowserWindow {
 }
 
 app.whenReady().then(async () => {
+  nativeTheme.themeSource = 'light';
+  process.env['PATH'] = [
+    process.env['PATH'] ?? '',
+    '/opt/homebrew/bin',
+    '/usr/local/bin',
+    join(homedir(), '.local/bin'),
+  ].join(delimiter);
   // The host owns the durable data. Electron's own userData directory is the
   // right home for it: it is per-user, per-app, and already backed up correctly.
-  const dataDir = join(app.getPath('userData'), 'host');
+  const dataDir =
+    process.env['GUHBOT_DATA_DIR'] ?? join(app.getPath('userData'), 'host');
+  const workspace =
+    process.env['GUHBOT_WORKSPACE'] ?? join(dataDir, 'workspace');
+  mkdirSync(workspace, { recursive: true });
+  let engine = process.env['GUHBOT_ENGINE'];
+  if (!engine && !process.env['GUHBOT_BASE_URL']) {
+    for (const candidate of createCliEngines()) {
+      if ((await candidate.probe()).available) {
+        engine = candidate.id;
+        break;
+      }
+    }
+  }
 
   try {
     bootstrapped = await bootstrapHost({
       dataDir,
       version: APP_VERSION,
-      cwd: process.cwd(),
-      ...(process.env['GUHBOT_BASE_URL'] !== undefined ? { baseUrl: process.env['GUHBOT_BASE_URL'] } : {}),
-      ...(process.env['GUHBOT_API_KEY'] !== undefined ? { apiKey: process.env['GUHBOT_API_KEY'] } : {}),
-      ...(process.env['GUHBOT_MODEL'] !== undefined ? { model: process.env['GUHBOT_MODEL'] } : {}),
+      cwd: workspace,
+      ...(process.env['GUHBOT_COMPANION_PORT']
+        ? {
+            companion: {
+              port: Number(process.env['GUHBOT_COMPANION_PORT']),
+              host: process.env['GUHBOT_COMPANION_HOST'] ?? '127.0.0.1',
+              insecurePlaintext:
+                process.env['GUHBOT_COMPANION_INSECURE'] === 'true',
+              allowedHosts: (
+                process.env['GUHBOT_COMPANION_ALLOWED_HOSTS'] ?? ''
+              )
+                .split(',')
+                .filter(Boolean),
+            },
+          }
+        : {}),
+      ...(engine ? { engine } : {}),
+      ...(process.env['GUHBOT_BASE_URL'] !== undefined
+        ? { baseUrl: process.env['GUHBOT_BASE_URL'] }
+        : {}),
+      ...(process.env['GUHBOT_API_KEY'] !== undefined
+        ? { apiKey: process.env['GUHBOT_API_KEY'] }
+        : {}),
+      ...(process.env['GUHBOT_MODEL'] !== undefined
+        ? { model: process.env['GUHBOT_MODEL'] }
+        : {}),
       allowedHosts: (process.env['GUHBOT_ALLOWED_HOSTS'] ?? '')
         .split(',')
         .map((h) => h.trim())
@@ -109,6 +157,11 @@ app.whenReady().then(async () => {
   ipcMain.on('guhbot:bridge-info', (event) => {
     event.returnValue = {
       hostUrl: bootstrapped?.hostUrl ?? '',
+      phoneUrl:
+        process.env['GUHBOT_PUBLIC_URL'] ??
+        bootstrapped?.companionUrl ??
+        bootstrapped?.hostUrl ??
+        '',
       token: bootstrapped?.rendererToken ?? '',
       appVersion: APP_VERSION,
     };

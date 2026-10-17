@@ -1,3 +1,14 @@
+# October 17, 2026: Guh Bot 0.2
+
+- Rebuilt the landing and desktop/web console around local Manrope fonts, an original SVG bot family and a light visual system. Added interactive examples, responsive navigation, Markdown output and working bot creation.
+- Added operator-controlled phone access, pairing QR codes, secure remote/tenant addresses, and immediate permission refresh. Closed the remote `devices.unlock` escalation path.
+- Persisted hosted tenant identity across restart; fixed separate mobile-token routing and removed shell execution from the shared gateway.
+- Made local waitlist writes atomic and serialized, refused malformed JSON, supported HTML form submissions and kept signup files out of static hosting assets.
+- Added Docker Compose, GitHub verification, reproducible macOS packaging and public AWS site infrastructure using IAM-protected Lambda origin access control.
+- Re-ran REA 6.5.0 against the corrected Grok Bot coordinator and recorded the evidence and remaining parity gaps.
+
+Local verification: 876 automated tests; package, desktop and mobile type checks; iOS bundle export; offline AWS synthesis. Native/browser interaction checks and delivery links are recorded in the release notes. AWS deployment is pending an authenticated session.
+
 # Changelog
 
 All notable changes to this project are recorded here. Versions follow

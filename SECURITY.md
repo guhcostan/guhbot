@@ -112,3 +112,11 @@ Install-time scripts are arbitrary code execution, so `pnpm-workspace.yaml`
 allow-lists exactly two packages that need them (`esbuild`, `electron`) and
 denies every other postinstall script by default. Adding a package to that list
 is a reviewable decision, not a routine one.
+
+## October 17, 2026 authorization update
+
+An earlier `devices.unlock` handler accepted a public constant without a local-only transport restriction. This revision closes that path. Paired phones start as viewers; only a current operator can grant another device operator access through `devices.setAccess`. Devices cannot self-promote. Authority is refreshed from durable state for every request, so a connected device cannot retain privileges after demotion or revocation. Revoked devices are excluded from event delivery.
+
+Granting operator access is a deliberate trust decision: that device can submit tasks, resolve approvals and delegate access to other devices. Keep it on a trusted, locked phone and use a secure remote endpoint. CLI engines apply their own tool policies; host tool approval boundaries do not intercept a separately running agent CLI.
+
+Hosted gateway tenants have separate application state, not OS-level isolation. The shared gateway excludes command execution from model tools. Do not enable arbitrary customer-controlled processes in this shared runtime. Run one container or VM per customer before adding that capability.

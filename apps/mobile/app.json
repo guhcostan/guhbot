@@ -1,19 +1,27 @@
 {
   "expo": {
-    "name": "guhbot",
+    "name": "Guh Bot",
     "slug": "guhbot",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "orientation": "portrait",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "scheme": "guhbot",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "bot.guhbot.mobile"
+      "bundleIdentifier": "bot.guhbot.mobile",
+      "entitlements": {
+        "keychain-access-groups": [
+          "$(AppIdentifierPrefix)bot.guhbot.mobile"
+        ]
+      }
     },
     "android": {
       "package": "bot.guhbot.mobile"
     },
-    "plugins": ["expo-secure-store"]
+    "plugins": [
+      "expo-secure-store"
+    ],
+    "icon": "./assets/icon.png"
   }
 }

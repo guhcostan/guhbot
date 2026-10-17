@@ -331,6 +331,16 @@ export class Host {
       throw new HostError('cancelled', 'host is shutting down');
     }
 
+    // Authority is durable host state, not a snapshot captured at WebSocket auth.
+    // Revocation and demotion must also apply to an already connected client.
+    if (session.device !== null) {
+      const current = this.store.getDevice(session.device.id);
+      if (current === null || current.revokedAt !== null) {
+        throw new HostError('unauthenticated', 'device has been revoked');
+      }
+      session.device = current;
+    }
+
     const entry = this.registry.get(method);
     if (!entry) {
       throw new HostError('not-found', `unknown method ${method}`);
@@ -652,6 +662,17 @@ const HANDLERS: HandlerTable = {
   'devices.list': async (host) => ({ devices: host.store.listDevices() }),
 
   'devices.revoke': async (host, _session, input) => ({ revoked: host.store.revokeDevice(input.deviceId) }),
+
+  'devices.setAccess': async (host, session, input) => {
+    if (input.deviceId === session.device?.id) {
+      throw new HostError('forbidden', 'change access for another device from the operator console');
+    }
+    const target = host.store.getDevice(input.deviceId);
+    if (target === null || target.revokedAt !== null) throw new HostError('not-found', 'active device not found');
+    const device = host.store.setDeviceClass(input.deviceId, input.deviceClass);
+    if (device === null) throw new HostError('not-found', 'device no longer exists');
+    return { device };
+  },
 
   'devices.unlock': async (host, session, input) => {
     // Local presence is established by the host process, not asserted by the

@@ -60,9 +60,63 @@ async function connect(tenantId: string, token: string): Promise<GuhbotClient> {
 }
 
 describe('provisioning', () => {
+  it('restores tenant identity, credentials and agents after a gateway restart', async () => {
+    const { tenantId, token } = await provision();
+    const first = await connect(tenantId, token);
+    const agent = await first.request('agents.create', {
+      name: 'Persistent researcher',
+    });
+    await first.close();
+    await gateway.close();
+    gateway = new CloudGateway({
+      rootDir,
+      baseUrl: '',
+      apiKey: undefined,
+      model: undefined,
+    });
+    await gateway.listen(0);
+    const restored = await connect(tenantId, token);
+    expect(
+      (await restored.request('agents.list', {})).agents.map((item) => item.id),
+    ).toContain(agent.id);
+    expect(gateway.authenticate(token)?.id).toBe(tenantId);
+    await restored.close();
+  });
+
+  it('accepts a separately paired phone token for the correct tenant only', async () => {
+    const a = await provision();
+    const b = await provision();
+    const owner = await connect(a.tenantId, a.token);
+    const pair = await owner.request('pairing.beginForDevice', {});
+    const claim = await owner.request('pairing.claim', {
+      pairingId: pair.pairingId,
+      code: pair.code,
+      deviceName: 'Phone',
+      platform: 'ios',
+    });
+    const phone = await connect(a.tenantId, claim.token);
+    expect(phone.deviceClass).toBe('background');
+    await expect(phone.request('agents.list', {})).resolves.toHaveProperty(
+      'agents',
+    );
+    const other = new GuhbotClient({
+      url: `ws://127.0.0.1:${gateway.port}/t/${b.tenantId}/rpc`,
+      token: claim.token,
+      autoReconnect: false,
+    });
+    await other.connect();
+    await expect(other.request('agents.list', {})).rejects.toBeTruthy();
+    expect(other.deviceClass).not.toBe('person');
+    await other.close();
+    await phone.close();
+    await owner.close();
+  });
+
   it('is disabled when no operator token is configured', async () => {
     delete process.env['GUHBOT_CLOUD_OPERATOR_TOKEN'];
-    const response = await fetch(`http://127.0.0.1:${gateway.port}/tenants`, { method: 'POST' });
+    const response = await fetch(`http://127.0.0.1:${gateway.port}/tenants`, {
+      method: 'POST',
+    });
     expect(response.status).toBe(503);
     const body = (await response.json()) as { error: string };
     expect(body.error).toMatch(/no operator token configured/);
@@ -89,7 +143,10 @@ describe('provisioning', () => {
   it('serves a health document', async () => {
     await provision();
     const response = await fetch(`http://127.0.0.1:${gateway.port}/health`);
-    const body = (await response.json()) as { service: string; tenants: number };
+    const body = (await response.json()) as {
+      service: string;
+      tenants: number;
+    };
     expect(body.service).toBe('guhbot-cloud');
     expect(body.tenants).toBe(1);
   });
@@ -107,8 +164,14 @@ describe('isolation', () => {
     expect(existsSync(join(dirA, 'master.key'))).toBe(true);
     expect(existsSync(join(dirB, 'data.db'))).toBe(true);
 
-    const keyA = (await import('node:fs')).readFileSync(join(dirA, 'master.key'), 'utf8');
-    const keyB = (await import('node:fs')).readFileSync(join(dirB, 'master.key'), 'utf8');
+    const keyA = (await import('node:fs')).readFileSync(
+      join(dirA, 'master.key'),
+      'utf8',
+    );
+    const keyB = (await import('node:fs')).readFileSync(
+      join(dirB, 'master.key'),
+      'utf8',
+    );
     // Two tenants must not share a key, or one could decrypt the other's secrets.
     expect(keyA).not.toBe(keyB);
   });
@@ -122,7 +185,14 @@ describe('isolation', () => {
     // Create an agent inside tenant A. The desktop-equivalent path is person
     // class; here we assert through the host directly to keep the test about
     // isolation rather than authorization.
-    const hostA = (gateway as unknown as { tenants: Map<string, { host: { store: { createAgent(i: { name: string }): unknown } } }> }).tenants.get(a.tenantId)!.host;
+    const hostA = (
+      gateway as unknown as {
+        tenants: Map<
+          string,
+          { host: { store: { createAgent(i: { name: string }): unknown } } }
+        >;
+      }
+    ).tenants.get(a.tenantId)!.host;
     hostA.store.createAgent({ name: 'Tenant A only' });
 
     const listA = await clientA.request('agents.list', {});
@@ -140,7 +210,10 @@ describe('isolation', () => {
     const b = await provision();
 
     // A's token, B's endpoint.
-    const response = await fetch(`http://127.0.0.1:${gateway.port}/t/${b.tenantId}/rpc`, { method: 'GET' });
+    const response = await fetch(
+      `http://127.0.0.1:${gateway.port}/t/${b.tenantId}/rpc`,
+      { method: 'GET' },
+    );
     expect(response.status).toBe(404); // not an upgrade; plain HTTP is not the RPC endpoint
 
     const crossed = new GuhbotClient({
@@ -154,7 +227,9 @@ describe('isolation', () => {
     try {
       await crossed.connect();
       await new Promise((r) => setTimeout(r, 150));
-      await expect(crossed.request('agents.list', {})).rejects.toMatchObject({ code: 'unauthenticated' });
+      await expect(crossed.request('agents.list', {})).rejects.toMatchObject({
+        code: 'unauthenticated',
+      });
     } catch {
       // Refusing the upgrade outright is also acceptable.
     }
@@ -182,7 +257,9 @@ describe('isolation', () => {
     await badToken.connect();
     await new Promise((r) => setTimeout(r, 200));
     expect(badToken.state).not.toBe('ready');
-    await expect(badToken.request('agents.list', {})).rejects.toMatchObject({ code: 'cancelled' });
+    await expect(badToken.request('agents.list', {})).rejects.toMatchObject({
+      code: 'cancelled',
+    });
     await badToken.close();
   });
 });
@@ -200,14 +277,19 @@ describe('proxied protocol', () => {
     // The provisioning token belongs to the tenant's owner console, so it is
     // person class and may do person-class work — the hosted equivalent of the
     // desktop app's own device.
-    const created = await client.request('agents.create', { name: 'Hosted agent' });
+    const created = await client.request('agents.create', {
+      name: 'Hosted agent',
+    });
     expect(created.name).toBe('Hosted agent');
     expect(client.deviceClass).toBe('person');
 
     // A second device added from here joins as background, exactly as it would
     // on a self-hosted machine, and is then refused person-class work.
     const pairing = await client.request('pairing.beginForDevice', {});
-    const anon = new GuhbotClient({ url: `ws://127.0.0.1:${gateway.port}/t/${tenantId}/rpc`, autoReconnect: false });
+    const anon = new GuhbotClient({
+      url: `ws://127.0.0.1:${gateway.port}/t/${tenantId}/rpc`,
+      autoReconnect: false,
+    });
     await anon.connect();
     await waitFor(() => anon.state === 'ready');
     const claimed = await anon.request('pairing.claim', {
@@ -225,7 +307,13 @@ describe('proxied protocol', () => {
 
   it('enforces the tenant limit', async () => {
     await gateway.close();
-    gateway = new CloudGateway({ rootDir, baseUrl: '', apiKey: undefined, model: undefined, maxTenants: 1 });
+    gateway = new CloudGateway({
+      rootDir,
+      baseUrl: '',
+      apiKey: undefined,
+      model: undefined,
+      maxTenants: 1,
+    });
     await gateway.listen(0);
 
     await provision();
@@ -256,7 +344,10 @@ describe('proxied protocol', () => {
   });
 });
 
-async function waitFor(predicate: () => boolean, timeoutMs = 5000): Promise<void> {
+async function waitFor(
+  predicate: () => boolean,
+  timeoutMs = 5000,
+): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (predicate()) return;

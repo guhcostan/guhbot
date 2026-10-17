@@ -27,7 +27,11 @@ import { capabilityFor } from '../core/capabilities';
 import { connectionView, type ConnectionView } from '../core/device';
 import type { HostEndpoint } from '../core/endpoint';
 import { describeError, type Problem } from '../core/errors';
-import type { Connection, ConnectionSnapshot, HostConnectionOptions } from '../host/connection';
+import type {
+  Connection,
+  ConnectionSnapshot,
+  HostConnectionOptions,
+} from '../host/connection';
 import { pairingMessage } from '../host/pairing';
 import type { PersistedHost, SessionStore } from '../host/storage';
 import { createStore, type Readable } from './store';
@@ -70,7 +74,10 @@ export interface AppStore extends Readable<AppSnapshot> {
   resolveApproval(approvalId: string, granted: boolean): Promise<void>;
   unpair(): Promise<void>;
   dismissProblem(): void;
-  request<M extends MethodName>(method: M, params: MethodInput<M>): Promise<MethodOutput<M>>;
+  request<M extends MethodName>(
+    method: M,
+    params: MethodInput<M>,
+  ): Promise<MethodOutput<M>>;
 }
 
 export interface AppStoreDeps {
@@ -84,7 +91,9 @@ export interface AppStoreDeps {
   readonly onHostReconnected: () => void;
 }
 
-type Settled<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly error: unknown };
+type Settled<T> =
+  | { readonly ok: true; readonly value: T }
+  | { readonly ok: false; readonly error: unknown };
 
 async function attempt<T>(work: Promise<T>): Promise<Settled<T>> {
   try {
@@ -94,7 +103,10 @@ async function attempt<T>(work: Promise<T>): Promise<Settled<T>> {
   }
 }
 
-function upsert<T extends { id: string }>(items: readonly T[], item: T): readonly T[] {
+function upsert<T extends { id: string }>(
+  items: readonly T[],
+  item: T,
+): readonly T[] {
   const index = items.findIndex((candidate) => candidate.id === item.id);
   if (index < 0) return [...items, item];
   const next = [...items];
@@ -106,7 +118,8 @@ function offlineProblem(): Problem {
   return {
     code: 'cancelled',
     title: 'No host connection',
-    detail: 'The phone is not connected to the host right now, so this was not sent. Reconnect and try again.',
+    detail:
+      'The phone is not connected to the host right now, so this was not sent. Reconnect and try again.',
     retryable: true,
     needsHostMachine: false,
   };
@@ -116,7 +129,12 @@ export function createAppStore(deps: AppStoreDeps): AppStore {
   const store = createStore<AppSnapshot>({
     status: 'starting',
     host: null,
-    connection: connectionView({ clientState: 'idle', paired: false, hasBeenReady: false, detail: null }),
+    connection: connectionView({
+      clientState: 'idle',
+      paired: false,
+      hasBeenReady: false,
+      detail: null,
+    }),
     deviceClass: null,
     deviceId: null,
     hostStatus: null,
@@ -155,7 +173,8 @@ export function createAppStore(deps: AppStoreDeps): AppStore {
 
     if (event === 'agent.updated') {
       const parsed = EventPayloads['agent.updated'].safeParse(payload);
-      if (parsed.success) patch({ agents: upsert(store.get().agents, parsed.data.agent) });
+      if (parsed.success)
+        patch({ agents: upsert(store.get().agents, parsed.data.agent) });
       return;
     }
 
@@ -167,7 +186,9 @@ export function createAppStore(deps: AppStoreDeps): AppStore {
         approvals:
           approval.status === 'pending'
             ? upsert(store.get().approvals, approval)
-            : store.get().approvals.filter((candidate) => candidate.id !== approval.id),
+            : store
+                .get()
+                .approvals.filter((candidate) => candidate.id !== approval.id),
       });
       return;
     }
@@ -176,7 +197,11 @@ export function createAppStore(deps: AppStoreDeps): AppStore {
       const parsed = EventPayloads['approval.resolved'].safeParse(payload);
       if (!parsed.success) return;
       const resolvedId = parsed.data.approval.id;
-      patch({ approvals: store.get().approvals.filter((candidate) => candidate.id !== resolvedId) });
+      patch({
+        approvals: store
+          .get()
+          .approvals.filter((candidate) => candidate.id !== resolvedId),
+      });
       return;
     }
 
@@ -194,13 +219,23 @@ export function createAppStore(deps: AppStoreDeps): AppStore {
     }
   };
 
-  const connect = async (endpoint: HostEndpoint, token: string, host: PersistedHost): Promise<void> => {
+  const connect = async (
+    endpoint: HostEndpoint,
+    token: string,
+    host: PersistedHost,
+  ): Promise<void> => {
     const previous = active;
     active = null;
     link = null;
     paired = true;
     if (previous !== null) await previous.stop().catch(() => undefined);
-    patch({ status: 'paired', host, deviceClass: null, deviceId: null, problem: null });
+    patch({
+      status: 'paired',
+      host,
+      deviceClass: null,
+      deviceId: null,
+      problem: null,
+    });
 
     const next = deps.createConnection({
       endpoint,
@@ -208,7 +243,10 @@ export function createAppStore(deps: AppStoreDeps): AppStore {
       onEvent: handleEvent,
       onChange: (snapshot) => {
         link = snapshot;
-        patch({ deviceClass: snapshot.deviceClass, deviceId: snapshot.deviceId });
+        patch({
+          deviceClass: snapshot.deviceClass,
+          deviceId: snapshot.deviceId,
+        });
       },
       onReconnected: () => {
         deps.onHostReconnected();
@@ -243,7 +281,9 @@ export function createAppStore(deps: AppStoreDeps): AppStore {
     patch({
       refreshing: false,
       ...(status.ok ? { hostStatus: status.value } : {}),
-      ...(agents.ok ? { agents: agents.value.agents, loadedAt: new Date().toISOString() } : {}),
+      ...(agents.ok
+        ? { agents: agents.value.agents, loadedAt: new Date().toISOString() }
+        : {}),
       ...(approvals.ok ? { approvals: approvals.value.approvals } : {}),
       problem: failed === undefined ? null : describeError(failed.error),
     });
@@ -272,11 +312,16 @@ export function createAppStore(deps: AppStoreDeps): AppStore {
         patch({ status: 'unpaired', host });
         return;
       }
-      await connect({ host: host.host, port: host.port }, token, host);
+      await connect(host, token, host);
     },
 
-    async pair(endpoint: HostEndpoint, pairingId: string, code: string): Promise<void> {
+    async pair(
+      endpoint: HostEndpoint,
+      pairingId: string,
+      code: string,
+    ): Promise<void> {
       patch({ pairing: { busy: true, error: null } });
+      let savingPairing = false;
 
       // A separate, anonymous link: the host only lets an unauthenticated
       // session call `pairing.claim`.
@@ -301,13 +346,14 @@ export function createAppStore(deps: AppStoreDeps): AppStore {
         });
 
         const host: PersistedHost = {
-          host: endpoint.host,
-          port: endpoint.port,
+          ...endpoint,
           deviceId: claimed.device.id,
           deviceName: claimed.device.name,
         };
+        savingPairing = true;
         await deps.session.saveToken(claimed.token);
         await deps.session.saveHost(host);
+        savingPairing = false;
         await candidate.stop().catch(() => undefined);
 
         patch({ host, pairing: { busy: false, error: null }, problem: null });
@@ -316,7 +362,16 @@ export function createAppStore(deps: AppStoreDeps): AppStore {
         await connect(endpoint, claimed.token, host);
       } catch (error) {
         await candidate.stop().catch(() => undefined);
-        patch({ pairing: { busy: false, error: pairingMessage(error, endpoint) } });
+        if (savingPairing)
+          await deps.session.clearToken().catch(() => undefined);
+        patch({
+          pairing: {
+            busy: false,
+            error: savingPairing
+              ? 'The host accepted this phone, but its keychain could not save the pairing. Unlock the phone and use a signed native build, then try a fresh pairing code.'
+              : pairingMessage(error, endpoint),
+          },
+        });
       }
     },
 
@@ -324,12 +379,13 @@ export function createAppStore(deps: AppStoreDeps): AppStore {
 
     async reconnect(): Promise<void> {
       const host = store.get().host;
-      const token = host === null ? null : await deps.session.loadToken().catch(() => null);
+      const token =
+        host === null ? null : await deps.session.loadToken().catch(() => null);
       if (host === null || token === null) {
         patch({ status: 'unpaired', deviceId: null, deviceClass: null });
         return;
       }
-      await connect({ host: host.host, port: host.port }, token, host);
+      await connect(host, token, host);
     },
 
     async createAgent(name: string): Promise<boolean> {
@@ -358,7 +414,11 @@ export function createAppStore(deps: AppStoreDeps): AppStore {
       patch({ creatingAgent: true });
       try {
         const agent = await connection.request('agents.create', { name });
-        patch({ agents: upsert(store.get().agents, agent), creatingAgent: false, problem: null });
+        patch({
+          agents: upsert(store.get().agents, agent),
+          creatingAgent: false,
+          problem: null,
+        });
         return true;
       } catch (error) {
         patch({ creatingAgent: false, problem: describeError(error) });
@@ -367,7 +427,10 @@ export function createAppStore(deps: AppStoreDeps): AppStore {
     },
 
     async resolveApproval(approvalId: string, granted: boolean): Promise<void> {
-      const capability = capabilityFor(store.get().deviceClass, 'approvals.resolve');
+      const capability = capabilityFor(
+        store.get().deviceClass,
+        'approvals.resolve',
+      );
       if (!capability.allowed) {
         patch({
           problem: {
@@ -391,7 +454,9 @@ export function createAppStore(deps: AppStoreDeps): AppStore {
       try {
         await connection.request('approvals.resolve', { approvalId, granted });
         patch({
-          approvals: store.get().approvals.filter((candidate) => candidate.id !== approvalId),
+          approvals: store
+            .get()
+            .approvals.filter((candidate) => candidate.id !== approvalId),
           resolvingApprovalId: null,
           problem: null,
         });
@@ -429,10 +494,17 @@ export function createAppStore(deps: AppStoreDeps): AppStore {
       patch({ problem: null });
     },
 
-    request<M extends MethodName>(method: M, params: MethodInput<M>): Promise<MethodOutput<M>> {
+    request<M extends MethodName>(
+      method: M,
+      params: MethodInput<M>,
+    ): Promise<MethodOutput<M>> {
       const connection = active;
       if (connection === null) {
-        return Promise.reject({ code: 'cancelled', message: 'not connected to a host', retryable: true } satisfies RpcError);
+        return Promise.reject({
+          code: 'cancelled',
+          message: 'not connected to a host',
+          retryable: true,
+        } satisfies RpcError);
       }
       return connection.request(method, params);
     },

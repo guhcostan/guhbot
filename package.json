@@ -1,6 +1,6 @@
 {
   "name": "guhbot",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Open-source, self-hostable agent host with desktop and mobile clients.",
   "license": "Apache-2.0",
@@ -18,10 +18,16 @@
     "dev:desktop": "pnpm --filter @guhbot/desktop dev",
     "dev:mobile": "pnpm --filter @guhbot/mobile start",
     "clean": "rm -rf packages/*/dist apps/*/dist node_modules/.cache",
-    "test:live": "pnpm -r --filter \"./packages/**\" build && vitest run --config vitest.live.config.ts"
+    "test:live": "pnpm -r --filter \"./packages/**\" build && vitest run --config vitest.live.config.ts",
+    "dev:site": "pnpm --filter @guhbot/cloud build && node website/serve.mjs",
+    "build:desktop": "pnpm build && pnpm --filter @guhbot/desktop build",
+    "package:desktop": "node scripts/package-desktop.mjs",
+    "dev:web": "pnpm --filter @guhbot/desktop dev --host 127.0.0.1"
   },
   "devDependencies": {
+    "@electron/packager": "^20.3.0",
     "@types/node": "^22.10.2",
+    "esbuild": "^0.28.2",
     "typescript": "^5.7.2",
     "vite": "^8.3.4",
     "vitest": "^5.0.4"

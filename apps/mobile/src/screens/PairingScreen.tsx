@@ -10,6 +10,7 @@ import { useAppState, useAppStore } from '../state/provider';
 import { colors, fontSize, radius, spacing } from '../theme';
 import { NoticeCard } from '../components/NoticeCard';
 import { Screen } from '../components/Screen';
+import { Mascot } from '../components/Avatar';
 
 const CODE_PATTERN = /^\d{8}$/;
 
@@ -35,7 +36,7 @@ export function PairingScreen(): ReactElement {
       setFieldError(result.error);
       return false;
     }
-    setHost(result.link.host);
+    setHost(result.link.secure || result.link.path ? `${result.link.secure ? 'wss' : 'ws'}://${result.link.host}${result.link.path ?? ''}` : result.link.host);
     setPort(String(result.link.port));
     setPairingId(result.link.pairingId);
     setCode(result.link.code);
@@ -53,7 +54,7 @@ export function PairingScreen(): ReactElement {
   const previous = state.host;
   useEffect(() => {
     if (previous === null) return;
-    setHost((current) => (current.length === 0 ? previous.host : current));
+    setHost((current) => (current.length === 0 ? (previous.secure ? `wss://${previous.host}${previous.path ?? ''}` : previous.host) : current));
     setPort((current) => (current.length === 0 ? String(previous.port) : current));
   }, [previous]);
 
@@ -85,22 +86,20 @@ export function PairingScreen(): ReactElement {
     <Screen>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.brand}>
-          <View style={styles.mark}>
-            <Text style={styles.markText}>G</Text>
-          </View>
-          <Text style={styles.brandName}>guhbot</Text>
+          <Mascot size={38} />
+          <Text style={styles.brandName}>guh bot</Text>
         </View>
         <Text style={styles.title}>Pair this phone with a host</Text>
         <Text style={styles.lead}>
           Run guhbot on the machine you want to drive, print a pairing code there, and enter it here. Scan the QR code on that screen and
-          everything below fills in.
+          everything below fills in. For remote access, use the secure wss:// address of your host.
         </Text>
 
         <NoticeCard
           title="What this phone will be allowed to do"
           detail={
-            'A device that pairs over the network is always a background device: it can watch agents, read transcripts and see approval requests. ' +
-            'Granting an approval, starting a run or changing anything on the host has to happen on the host machine itself, because guhbot does not let a remote device promote itself.'
+            'Your phone starts as a viewer: it can follow agents and read results. On your desktop, open Devices & pairing to grant operator access to this phone. ' +
+            'Operator access lets you send tasks and approve actions. Reconnect this phone after the desktop grants access.'
           }
         />
 

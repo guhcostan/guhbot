@@ -26,6 +26,7 @@ const { contextBridge, ipcRenderer } = electron;
 export interface DesktopBridge {
   /** Where the embedded host is listening. */
   hostUrl: string;
+  phoneUrl: string;
   /** Person-class device token. Possession is equivalent to local presence. */
   token: string;
   platform: string;
@@ -38,6 +39,7 @@ export interface DesktopBridge {
 
 const bridge: DesktopBridge = {
   hostUrl: String(ipcRenderer.sendSync('guhbot:bridge-info')?.hostUrl ?? ''),
+  phoneUrl: String(ipcRenderer.sendSync('guhbot:bridge-info')?.phoneUrl ?? ''),
   token: String(ipcRenderer.sendSync('guhbot:bridge-info')?.token ?? ''),
   platform: process.platform,
   appVersion: String(ipcRenderer.sendSync('guhbot:bridge-info')?.appVersion ?? '0.0.0'),

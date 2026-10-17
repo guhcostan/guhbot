@@ -1,17 +1,25 @@
-import { createServer, type IncomingMessage, type Server as HttpServer, type ServerResponse } from 'node:http';
+import {
+  createServer,
+  type IncomingMessage,
+  type Server as HttpServer,
+  type ServerResponse,
+} from 'node:http';
 import { mkdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { WebSocketServer } from 'ws';
-import { AgentLoop, OpenAiCompatibleProvider, builtinTools } from '@guhbot/agent';
-import { Host, hashToken } from '@guhbot/host-core';
+import {
+  AgentLoop,
+  OpenAiCompatibleProvider,
+  builtinTools,
+} from '@guhbot/agent';
+import { Host, Store, hashToken } from '@guhbot/host-core';
 import { HostServer } from '@guhbot/server';
 
 /**
  * Hosted mode.
  *
- * The design decision that matters here is **isolation by process, not by
- * column**. Each tenant gets its own `Host`, its own data directory, its own
+ * The design decision that matters here is **separate runtime state per tenant**. Each tenant gets its own `Host` in the gateway process, its own data directory, its own
  * SQLite file and its own master key. There is no shared database with a
  * `tenant_id` on every row, because a single missing `WHERE` in that design
  * leaks one customer's transcripts into another's.
@@ -58,18 +66,36 @@ export interface CloudOptions {
   maxTenants?: number;
   /** Hosts agents may reach. Empty means no egress. */
   allowedHosts?: string[];
+  /**
+   * Interface the gateway listens on. Loopback by default — that is the honest
+   * posture for a gateway that fronts real tenants, and keeps a stray process
+   * from being reachable off the machine. A deployment that puts the gateway
+   * behind a load balancer (container, ECS task) sets this to `0.0.0.0`.
+   */
+  bindHost?: string;
 }
 
 export class CloudGateway {
   private readonly options: CloudOptions;
   private readonly http: HttpServer;
-  private readonly tenants = new Map<string, { tenant: Tenant; host: Host; server: HostServer }>();
+  private readonly tenants = new Map<
+    string,
+    { tenant: Tenant; host: Host; server: HostServer }
+  >();
   private readonly wss: WebSocketServer;
   private boundPort = 0;
+  private readonly bindHost: string;
+  private readonly catalog: Store;
+  private initialized = false;
 
   constructor(options: CloudOptions) {
     this.options = options;
-    mkdirSync(join(options.rootDir, 'tenants'), { recursive: true, mode: 0o700 });
+    this.bindHost = options.bindHost ?? '127.0.0.1';
+    mkdirSync(join(options.rootDir, 'tenants'), {
+      recursive: true,
+      mode: 0o700,
+    });
+    this.catalog = new Store({ dataDir: join(options.rootDir, 'catalog') });
 
     this.http = createServer((req, res) => {
       void this.handleHttp(req, res);
@@ -84,9 +110,20 @@ export class CloudGateway {
   }
 
   async listen(port = 0): Promise<number> {
-    await new Promise<void>((resolvePromise) => this.http.listen(port, '127.0.0.1', resolvePromise));
+    if (!this.initialized) {
+      await this.restoreTenants();
+      this.initialized = true;
+    }
+    await new Promise<void>((resolvePromise, reject) => {
+      this.http.once('error', reject);
+      this.http.listen(port, this.bindHost, () => {
+        this.http.off('error', reject);
+        resolvePromise();
+      });
+    });
     const address = this.http.address();
-    this.boundPort = typeof address === 'object' && address !== null ? address.port : port;
+    this.boundPort =
+      typeof address === 'object' && address !== null ? address.port : port;
     return this.boundPort;
   }
 
@@ -102,7 +139,9 @@ export class CloudGateway {
   async createTenant(): Promise<{ tenant: Tenant; token: string }> {
     const max = this.options.maxTenants ?? 100;
     if (this.tenants.size >= max) {
-      throw new Error(`tenant limit reached (${max}); refusing to start another host`);
+      throw new Error(
+        `tenant limit reached (${max}); refusing to start another host`,
+      );
     }
 
     const id = `t_${randomBytes(12).toString('hex')}`;
@@ -120,6 +159,7 @@ export class CloudGateway {
 
     const { host, server } = await this.startHost(tenant, token);
     this.tenants.set(id, { tenant, host, server });
+    this.persistTenants();
     return { tenant, token };
   }
 
@@ -138,26 +178,33 @@ export class CloudGateway {
    * from this one and will join as `background`, exactly as it would on a
    * self-hosted machine.
    */
-  private async startHost(tenant: Tenant, token: string): Promise<{ host: Host; server: HostServer }> {
+  private async startHost(
+    tenant: Tenant,
+    token?: string,
+  ): Promise<{ host: Host; server: HostServer }> {
     const provider =
       this.options.baseUrl.length > 0
         ? new OpenAiCompatibleProvider({
             baseUrl: this.options.baseUrl,
             apiKey: this.options.apiKey,
-            ...(this.options.model !== undefined ? { defaultModel: this.options.model } : {}),
+            ...(this.options.model !== undefined
+              ? { defaultModel: this.options.model }
+              : {}),
           })
         : null;
 
     const host = new Host({
       dataDir: tenant.dataDir,
-      version: '0.1.0',
+      version: '0.2.0',
       mode: 'hosted',
       capabilities: { exec: false, filesystem: true, hosted: true },
       ...(provider
         ? {
             executor: new AgentLoop({
               provider,
-              tools: builtinTools({ allowedHosts: this.options.allowedHosts ?? [] }),
+              tools: builtinTools({
+                allowedHosts: this.options.allowedHosts ?? [],
+              }).filter((tool) => tool.name !== 'run_command'),
               cwd: tenant.dataDir,
             }),
           }
@@ -165,14 +212,16 @@ export class CloudGateway {
     });
 
     // The tenant's device, keyed by the same secret the gateway verifies.
-    const salt = createHash('sha256').update(`tenant:${tenant.id}`).digest();
-    host.store.createDevice({
-      name: 'Cloud console',
-      platform: 'cloud',
-      deviceClass: 'person',
-      tokenSalt: salt,
-      tokenHash: hashToken(token, salt),
-    });
+    if (token !== undefined) {
+      const salt = createHash('sha256').update(`tenant:${tenant.id}`).digest();
+      host.store.createDevice({
+        name: 'Cloud console',
+        platform: 'cloud',
+        deviceClass: 'person',
+        tokenSalt: salt,
+        tokenHash: hashToken(token, salt),
+      });
+    }
 
     // Loopback only, and deliberately so: tenants reach their host through this
     // gateway, never directly. That keeps one place where authentication and
@@ -181,6 +230,48 @@ export class CloudGateway {
     const { port } = await server.listen();
     tenant.port = port;
     return { host, server };
+  }
+
+  private persistTenants(): void {
+    this.catalog.setMeta(
+      'tenants',
+      JSON.stringify(
+        [...this.tenants.values()].map(({ tenant }) => ({
+          id: tenant.id,
+          tokenHash: tenant.tokenHash.toString('hex'),
+          createdAt: tenant.createdAt,
+        })),
+      ),
+    );
+  }
+
+  private async restoreTenants(): Promise<void> {
+    const raw = this.catalog.getMeta('tenants');
+    if (raw === null) return;
+    const records: unknown = JSON.parse(raw);
+    if (!Array.isArray(records)) throw new Error('invalid tenant catalog');
+    for (const value of records as unknown[]) {
+      if (typeof value !== 'object' || value === null)
+        throw new Error('invalid tenant catalog entry');
+      const item = value as Record<string, unknown>;
+      if (
+        typeof item['id'] !== 'string' ||
+        !/^t_[a-f0-9]{24}$/.test(item['id']) ||
+        typeof item['tokenHash'] !== 'string' ||
+        !/^[a-f0-9]{64}$/.test(item['tokenHash']) ||
+        typeof item['createdAt'] !== 'string'
+      )
+        throw new Error('invalid tenant catalog entry');
+      const tenant: Tenant = {
+        id: item['id'],
+        tokenHash: Buffer.from(item['tokenHash'], 'hex'),
+        createdAt: item['createdAt'],
+        port: null,
+        dataDir: join(this.options.rootDir, 'tenants', item['id']),
+      };
+      const { host, server } = await this.startHost(tenant);
+      this.tenants.set(tenant.id, { tenant, host, server });
+    }
   }
 
   /** Resolve a bearer token to a running tenant. Returns null when it does not match. */
@@ -199,22 +290,32 @@ export class CloudGateway {
     await entry.server.close();
     await entry.host.close('tenant destroyed');
     this.tenants.delete(id);
+    this.persistTenants();
     return true;
   }
 
   listTenants(): Tenant[] {
-    return [...this.tenants.values()].map(({ tenant }) => ({ ...tenant, tokenHash: Buffer.alloc(0) }));
+    return [...this.tenants.values()].map(({ tenant }) => ({
+      ...tenant,
+      tokenHash: Buffer.alloc(0),
+    }));
   }
 
   // -------------------------------------------------------------------------
   // HTTP surface
   // -------------------------------------------------------------------------
 
-  private async handleHttp(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  private async handleHttp(
+    req: IncomingMessage,
+    res: ServerResponse,
+  ): Promise<void> {
     const url = new URL(req.url ?? '/', 'http://localhost');
 
     if (req.method === 'GET' && url.pathname === '/health') {
-      this.json(res, 200, { service: 'guhbot-cloud', tenants: this.tenants.size });
+      this.json(res, 200, {
+        service: 'guhbot-cloud',
+        tenants: this.tenants.size,
+      });
       return;
     }
 
@@ -224,7 +325,8 @@ export class CloudGateway {
       const operator = process.env['GUHBOT_CLOUD_OPERATOR_TOKEN'];
       if (operator === undefined || operator.length === 0) {
         this.json(res, 503, {
-          error: 'this gateway has no operator token configured, so tenant provisioning is disabled',
+          error:
+            'this gateway has no operator token configured, so tenant provisioning is disabled',
         });
         return;
       }
@@ -243,7 +345,9 @@ export class CloudGateway {
           note: 'Store this token now. Only its hash is retained, so it cannot be recovered.',
         });
       } catch (error) {
-        this.json(res, 429, { error: error instanceof Error ? error.message : String(error) });
+        this.json(res, 429, {
+          error: error instanceof Error ? error.message : String(error),
+        });
       }
       return;
     }
@@ -253,7 +357,10 @@ export class CloudGateway {
 
   private json(res: ServerResponse, status: number, body: unknown): void {
     const payload = JSON.stringify(body);
-    res.writeHead(status, { 'content-type': 'application/json', 'content-length': Buffer.byteLength(payload) });
+    res.writeHead(status, {
+      'content-type': 'application/json',
+      'content-length': Buffer.byteLength(payload),
+    });
     res.end(payload);
   }
 
@@ -269,7 +376,11 @@ export class CloudGateway {
    * enforces — the `person`/`background` split, schema validation, approvals —
    * still applies, and is still enforced on the far side of this hop.
    */
-  private async handleUpgrade(req: IncomingMessage, socket: import('node:stream').Duplex, head: Buffer): Promise<void> {
+  private async handleUpgrade(
+    req: IncomingMessage,
+    socket: import('node:stream').Duplex,
+    head: Buffer,
+  ): Promise<void> {
     const url = new URL(req.url ?? '/', 'http://localhost');
     const match = /^\/t\/([^/]+)\/rpc$/.exec(url.pathname);
     if (!match) {
@@ -287,7 +398,10 @@ export class CloudGateway {
     }
 
     const token = url.searchParams.get('token') ?? bearer(req);
-    const authenticated = token !== null && this.authenticate(token)?.id === tenantId;
+    const authenticated =
+      token !== null &&
+      (this.authenticate(token)?.id === tenantId ||
+        entry.host.authenticate(token) !== null);
 
     // A request with no valid token is still proxied, but without credentials.
     // That is deliberate rather than lax: an unauthenticated connection is how a
@@ -298,7 +412,9 @@ export class CloudGateway {
     // What the gateway does enforce is that a token belonging to tenant A can
     // never be presented to tenant B: an unmatched token is stripped, so the
     // request arrives unauthenticated and cannot borrow another tenant's identity.
-    const upstreamQuery = authenticated ? `?token=${encodeURIComponent(token)}` : '';
+    const upstreamQuery = authenticated
+      ? `?token=${encodeURIComponent(token)}`
+      : '';
 
     // Forward the upgrade to the tenant's loopback host, so its own
     // authentication and authorization path runs unchanged.
@@ -342,7 +458,8 @@ export class CloudGateway {
         queue.length = 0;
 
         upgraded.on('message', (data, isBinary) => {
-          if (target.readyState === target.OPEN) target.send(data, { binary: isBinary });
+          if (target.readyState === target.OPEN)
+            target.send(data, { binary: isBinary });
         });
         upgraded.on('close', closeBoth);
         upgraded.on('error', closeBoth);
@@ -360,10 +477,16 @@ export class CloudGateway {
   }
 
   async close(): Promise<void> {
-    for (const id of [...this.tenants.keys()]) {
-      await this.destroyTenant(id);
+    for (const entry of this.tenants.values()) {
+      await entry.server.close();
+      await entry.host.close('gateway stopped');
     }
-    await new Promise<void>((resolvePromise) => this.http.close(() => resolvePromise()));
+    this.tenants.clear();
+    this.wss.close();
+    await new Promise<void>((resolvePromise) =>
+      this.http.close(() => resolvePromise()),
+    );
+    this.catalog.close();
   }
 }
 

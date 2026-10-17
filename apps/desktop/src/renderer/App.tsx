@@ -1,200 +1,441 @@
 import type { JSX } from 'react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import type { Agent, Approval, Entry, Run, RunStatus } from '@guhbot/protocol';
+import {
+  ArrowRight,
+  ArrowUp,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  FileText,
+  Folder,
+  Link2,
+  Menu,
+  Monitor,
+  Plus,
+  Search,
+  ShieldCheck,
+  Square,
+  X,
+} from 'lucide-react';
+import { motion, useReducedMotion } from 'motion/react';
+const RichText = lazy(() => import('./RichText.js'));
 import { useHost } from './api.js';
-import logo from './assets/mascot/logo.svg';
+import { HostDialogs } from './HostDialogs.js';
+import avatar1 from './assets/mascot/guh.svg';
+import avatar2 from './assets/mascot/peach.svg';
+import avatar3 from './assets/mascot/mint.svg';
 import keeperPerson from './assets/mascot/keeper-person.svg';
 import keeperBackground from './assets/mascot/keeper-background.svg';
 import keeperAsleep from './assets/mascot/keeper-asleep.svg';
-import avatar1 from './assets/mascot/avatar-1.svg';
-import avatar2 from './assets/mascot/avatar-2.svg';
-import avatar3 from './assets/mascot/avatar-3.svg';
-import avatar4 from './assets/mascot/avatar-4.svg';
-import avatar5 from './assets/mascot/avatar-5.svg';
-import avatar6 from './assets/mascot/avatar-6.svg';
 import './App.css';
+const avatar4 = avatar1,
+  avatar5 = avatar2,
+  avatar6 = avatar3;
 
-/**
- * The desktop UI: a premium chat surface in the style of agentes.chat / Grok.
- *
- * Layout: a quiet sidebar (which agents exist + how to reach them) and a
- * central thread (what the selected agent is saying + what waits on a human).
- * Approvals stay pinned above the thread because a parked run does nothing
- * until someone looks at it.
- */
 export function App(): JSX.Element {
-  const { state, selectAgent, sendPrompt, resolveApproval } = useHost();
+  const api = useHost();
+  const { state, selectAgent, sendPrompt, resolveApproval, cancelRun } = api;
+  const [dialog, setDialog] = useState<'agent' | 'devices' | 'connect' | null>(
+    null,
+  );
   const [draft, setDraft] = useState('');
   const [query, setQuery] = useState('');
+  const [sending, setSending] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const threadRef = useRef<HTMLDivElement | null>(null);
-
+  const composerRef = useRef<HTMLTextAreaElement | null>(null);
+  const reducedMotion = useReducedMotion();
   useEffect(() => {
     const node = threadRef.current;
     if (node) node.scrollTop = node.scrollHeight;
-  }, [state.entries.length, state.activeAgentId]);
-
-  const activeAgent = state.agents.find((a) => a.id === state.activeAgentId) ?? null;
-  const activeRun = useMemo(() => latestRun(state.runs, state.activeAgentId), [state.runs, state.activeAgentId]);
-
-  // Hidden agents stay reachable by id but never appear in a list a human
-  // browses: the sidebar, the counts and the welcome picks all agree on that.
-  const visibleAgents = useMemo(() => state.agents.filter((a) => !a.hidden), [state.agents]);
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (q.length === 0) return visibleAgents;
-    return visibleAgents.filter(
-      (a) => a.name.toLowerCase().includes(q) || (a.model ?? '').toLowerCase().includes(q),
-    );
-  }, [visibleAgents, query]);
-
+  }, [state.entries, state.activeAgentId]);
+  const visibleAgents = useMemo(
+    () => state.agents.filter((a) => !a.hidden),
+    [state.agents],
+  );
+  const filtered = useMemo(
+    () =>
+      visibleAgents.filter((a) =>
+        a.name.toLowerCase().includes(query.trim().toLowerCase()),
+      ),
+    [visibleAgents, query],
+  );
+  const active =
+    visibleAgents.find((a) => a.id === state.activeAgentId) ?? null;
+  const run = latestRun(state.runs, state.activeAgentId);
+  const running = runInFlight(run);
+  const operator = state.deviceClass === 'person';
+  const ready = state.status === 'ready';
+  const canSend =
+    operator &&
+    ready &&
+    state.host?.inferenceReady === true &&
+    active !== null &&
+    !sending;
   const submit = (): void => {
     const text = draft.trim();
-    if (text.length === 0) return;
-    setDraft('');
-    void sendPrompt(text);
+    if (!text || !canSend || running) return;
+    setSending(true);
+    void sendPrompt(text)
+      .then(() =>
+        setDraft((current) => (current.trim() === text ? '' : current)),
+      )
+      .catch(() => undefined)
+      .finally(() => setSending(false));
   };
-
+  const suggest = (text: string): void => {
+    setDraft(text);
+    composerRef.current?.focus();
+  };
   return (
     <div className="shell">
-      <aside className="sidebar">
+      <a className="skip-link" href="#conversation">
+        Skip to conversation
+      </a>
+      {sidebarOpen ? (
+        <button
+          className="sidebar-shade"
+          type="button"
+          aria-label="Close sidebar"
+          onClick={() => setSidebarOpen(false)}
+        />
+      ) : null}
+      <aside className={`sidebar ${sidebarOpen ? 'sidebar-open' : ''}`}>
         <div className="brand">
-          <img className="brand-logo" src={logo} alt="guhbot" />
-          <span className="brand-version">{state.host?.version ?? '…'}</span>
+          <img src={avatar1} width="36" height="36" alt="" />
+          <span>guh bot</span>
+          <button
+            className="icon-button sidebar-close"
+            type="button"
+            aria-label="Close sidebar"
+            onClick={() => setSidebarOpen(false)}
+          >
+            <X />
+          </button>
         </div>
-
-        <div className="conn">
-          <span className={`conn-dot ${state.status === 'ready' ? 'on' : 'off'}`} />
-          {state.status === 'ready' ? 'connected' : state.status}
-          {state.deviceClass !== null ? <span className="conn-pill">{state.deviceClass}</span> : null}
+        <div className="workspace-switch">
+          <span className={`connection-dot ${ready ? 'online' : ''}`} />
+          <span>
+            {state.host?.mode === 'hosted'
+              ? 'Hosted workspace'
+              : 'Your workspace'}
+          </span>
+          <ChevronDown size={15} />
         </div>
-
-        {/*
-          Keeper carries the authorization model, so it belongs here rather than
-          only on the marketing site. A device with a person token sees both eyes
-          open; a paired phone sees one, because it cannot act outward.
-        */}
-        <div className="keeper-row">
-          <img className="keeper" src={keeperState(state.deviceClass, activeRun)} alt="" />
-          <span className="keeper-note">{keeperNote(state.deviceClass, activeRun)}</span>
-        </div>
-
+        <button
+          className="new-bot"
+          type="button"
+          disabled={!ready || !operator}
+          onClick={() => setDialog('agent')}
+        >
+          <Plus size={19} />
+          New bot
+        </button>
         <label className="search">
-          <span className="ic">⌕</span>
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search agents…" aria-label="Search agents" />
+          <Search size={18} />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search bots…"
+            aria-label="Search bots"
+          />
         </label>
-
-        <div className="side-label">
-          Agents <em>{visibleAgents.length}</em>
-        </div>
-        <nav className="agent-list" aria-label="Agents">
+        <span className="sidebar-label">
+          Your bots<span>{visibleAgents.length || ''}</span>
+        </span>
+        <nav className="agent-list" aria-label="Your bots">
+          {filtered.map((agent) => (
+            <button
+              key={agent.id}
+              className={`agent-item ${active?.id === agent.id ? 'selected' : ''}`}
+              type="button"
+              onClick={() => {
+                selectAgent(agent.id);
+                setSidebarOpen(false);
+              }}
+            >
+              <img src={avatarFor(agent.name)} width="31" height="31" alt="" />
+              <span>{agent.name}</span>
+              {agent.unreadCount ? <em>{agent.unreadCount}</em> : null}
+            </button>
+          ))}
           {filtered.length === 0 ? (
-            <div className="muted">{visibleAgents.length === 0 ? 'No agents yet. Create one on the host.' : 'No match.'}</div>
-          ) : (
-            filtered.map((agent) => (
-              <button
-                key={agent.id}
-                type="button"
-                onClick={() => selectAgent(agent.id)}
-                className={`agent-row ${agent.id === state.activeAgentId ? 'active' : ''}`}
-              >
-                <img className="avatar" src={avatarFor(agent.name)} alt="" />
-                <span className="agent-meta">
-                  <span className="agent-name">{agent.name}</span>
-                  <span className="agent-sub">{agent.model ?? 'host default model'}</span>
-                </span>
-                {agent.unreadCount > 0 ? <span className="badge">{agent.unreadCount > 99 ? '99+' : agent.unreadCount}</span> : null}
-                <span className={`status-dot ${agent.status}`} title={agent.status} />
-              </button>
-            ))
-          )}
+            <p className="sidebar-empty">
+              {query
+                ? 'No matching bots.'
+                : ready
+                  ? 'Make room for your first bot.'
+                  : 'Connect a host to find your bots.'}
+            </p>
+          ) : null}
         </nav>
-
-        <div className="side-foot">
-          {state.host?.inferenceReady === false ? (
-            <div className="host-card warn">
-              No model configured. Start with <b>GUHBOT_BASE_URL</b> and <b>GUHBOT_MODEL</b> set.
-            </div>
-          ) : (
-            <div className="host-card">
-              {state.host?.mode ?? 'self-hosted'} · {Object.entries(state.host?.capabilities ?? {}).filter(([, v]) => v).length} capabilities on
-            </div>
-          )}
+        <div className="sidebar-bottom">
+          <button type="button" onClick={() => setDialog('connect')}>
+            <Link2 />
+            Connect a host
+          </button>
+          <button
+            type="button"
+            disabled={!ready}
+            onClick={() => setDialog('devices')}
+          >
+            <Monitor />
+            Devices & pairing
+          </button>
+          <div className="workspace-note">
+            <ShieldCheck />
+            <span>
+              {ready
+                ? operator
+                  ? 'Operator access'
+                  : 'Viewing access'
+                : state.status === 'connecting'
+                  ? 'Connecting…'
+                  : 'No host connected'}
+            </span>
+          </div>
         </div>
       </aside>
-
-      <main className="main">
-        {state.error !== null ? <div className="error-bar">{state.error}</div> : null}
-
-        {state.approvals.length > 0 ? (
+      <main className="main" id="conversation">
+        <header className="chat-header">
+          <button
+            className="icon-button mobile-menu"
+            type="button"
+            aria-label="Open sidebar"
+            onClick={() => setSidebarOpen(true)}
+          >
+            <Menu />
+          </button>
+          {active ? (
+            <>
+              <img
+                className="header-avatar"
+                src={avatarFor(active.name)}
+                width="40"
+                height="40"
+                alt=""
+              />
+              <div>
+                <h1>{active.name}</h1>
+                <p>{active.model ?? 'Your own AI teammate'}</p>
+              </div>
+            </>
+          ) : (
+            <div className="header-title">
+              <h1>Your workspace</h1>
+              <p>A little team of your own.</p>
+            </div>
+          )}
+          <div className="header-status">
+            <span className={`connection-dot ${ready ? 'online' : ''}`} />
+            <span>
+              {ready
+                ? 'Connected'
+                : state.status === 'connecting'
+                  ? 'Connecting'
+                  : 'Offline'}
+            </span>
+          </div>
+        </header>
+        {state.error ? (
+          <div className="error-bar" role="alert">
+            {state.error}
+          </div>
+        ) : null}
+        {ready && !state.host?.inferenceReady ? (
+          <div className="setup-banner">
+            <Folder size={17} />
+            <span>
+              Connect an agent CLI or model endpoint to start working.
+            </span>
+            <a
+              href="https://github.com/guhcostan/guhbot#quick-start"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Setup guide
+              <ArrowRight size={14} />
+            </a>
+          </div>
+        ) : null}
+        {!operator && ready ? (
+          <div className="viewer-banner">
+            You're viewing this workspace. An operator can grant access in
+            Devices & pairing.
+          </div>
+        ) : null}
+        {state.approvals.length ? (
           <section className="approvals" aria-label="Pending approvals">
             {state.approvals.map((approval) => (
               <ApprovalCard
                 key={approval.id}
                 approval={approval}
-                busy={state.resolvingApprovalId === approval.id}
-                onResolve={(g) => void resolveApproval(approval.id, g)}
+                busy={!operator || state.resolvingApprovalId === approval.id}
+                onResolve={(granted) =>
+                  void resolveApproval(approval.id, granted)
+                }
               />
             ))}
           </section>
         ) : null}
-
-        {activeAgent === null ? (
-          <WelcomeState onPick={(id) => selectAgent(id)} agents={visibleAgents} />
-        ) : (
-          <>
-            <header className="chat-header">
-              <img className="avatar" src={avatarFor(activeAgent.name)} alt="" />
-              <h2>{activeAgent.name}</h2>
-              {activeAgent.model !== null ? <span className="model">{activeAgent.model}</span> : null}
-              {activeRun !== null && (activeRun.status === 'running' || activeRun.status === 'waiting-approval' || activeRun.status === 'queued') ? (
-                <span className={`run-pill ${activeRun.status === 'waiting-approval' ? 'waiting' : ''}`}>
-                  <span className="pulse" />
-                  {activeRun.status === 'waiting-approval' ? 'waiting on you' : activeRun.status}
-                </span>
-              ) : null}
-            </header>
-
-            <div className="thread" ref={threadRef}>
-              <div className="thread-inner">
-                {state.entries.length === 0 ? (
-                  <ThreadEmpty agent={activeAgent} onSuggest={(t) => setDraft(t)} />
-                ) : (
-                  state.entries.map((entry) => <EntryView key={entry.id} entry={entry} />)
-                )}
-              </div>
-            </div>
-
-            <div className="composer-zone">
-              <div className="composer">
-                <textarea
-                  value={draft}
-                  onChange={(event) => setDraft(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' && !event.shiftKey) {
-                      event.preventDefault();
-                      submit();
+        <div className="thread" ref={threadRef}>
+          {state.entries.length === 0 ? (
+            <motion.div
+              key={active?.id ?? 'welcome'}
+              className="empty"
+              initial={reducedMotion ? false : { opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.25 }}
+            >
+              <img
+                src={active ? avatarFor(active.name) : avatar1}
+                width="90"
+                height="90"
+                alt=""
+              />
+              <h2>
+                {active
+                  ? 'What are we working on?'
+                  : ready
+                    ? 'Meet your first bot.'
+                    : 'Your team starts here.'}
+              </h2>
+              {active ? (
+                <div className="suggestions">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      suggest('Summarize the notes in my workspace.')
                     }
-                  }}
-                  placeholder={`Message ${activeAgent.name}…`}
-                  rows={1}
-                  aria-label="Message composer"
+                  >
+                    <FileText />
+                    Summarize my notes
+                    <ArrowRight />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      suggest(
+                        'Help me plan a project. Ask me what you need to know first.',
+                      )
+                    }
+                  >
+                    <Folder />
+                    Help me plan a project
+                    <ArrowRight />
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <p>
+                    {ready
+                      ? 'Give it a name, a role, and something worth doing.'
+                      : 'Connect to Guh Bot on your computer or a host you manage.'}
+                  </p>
+                  <button
+                    className="action-button primary-action"
+                    type="button"
+                    onClick={() =>
+                      setDialog(ready && operator ? 'agent' : 'connect')
+                    }
+                  >
+                    {ready && operator
+                      ? 'Create your first bot'
+                      : 'Connect a host'}
+                    <ArrowRight size={17} />
+                  </button>
+                </>
+              )}
+            </motion.div>
+          ) : (
+            <div className="thread-inner">
+              {state.entries.map((entry) => (
+                <EntryView
+                  key={entry.id}
+                  entry={entry}
+                  avatar={active ? avatarFor(active.name) : avatar1}
+                  name={active?.name ?? 'Bot'}
                 />
-                <button type="button" className="send-btn" onClick={submit} disabled={draft.trim().length === 0} aria-label="Send">
-                  ↑
-                </button>
-              </div>
-              <div className="composer-hint">
-                <kbd>Enter</kbd> to send · <kbd>Shift + Enter</kbd> for a new line
-              </div>
+              ))}
+              {running ? (
+                <div className="working-status" role="status">
+                  <span className="working-dot" />
+                  {run?.status === 'waiting-approval'
+                    ? 'Waiting for your approval'
+                    : 'Working on it…'}
+                </div>
+              ) : null}
+              {run?.status === 'failed' ? (
+                <p className="run-error" role="alert">
+                  {run.error ?? 'This task could not finish. Try again.'}
+                </p>
+              ) : null}
             </div>
-          </>
-        )}
+          )}
+        </div>
+        <div className="composer-zone">
+          <form
+            className="composer"
+            onSubmit={(e) => {
+              e.preventDefault();
+              submit();
+            }}
+          >
+            <textarea
+              ref={composerRef}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (
+                  e.key === 'Enter' &&
+                  !e.shiftKey &&
+                  !e.nativeEvent.isComposing
+                ) {
+                  e.preventDefault();
+                  submit();
+                }
+              }}
+              placeholder={
+                active
+                  ? `Give ${active.name} something to do…`
+                  : 'Create a bot to start a conversation…'
+              }
+              aria-label="Message composer"
+              rows={1}
+              disabled={!active || !operator || !ready}
+            />
+            {running ? (
+              <button
+                className="send-button stop-button"
+                type="button"
+                aria-label="Stop task"
+                onClick={() => run && void cancelRun(run.id)}
+              >
+                <Square size={17} />
+              </button>
+            ) : (
+              <button
+                className="send-button"
+                type="submit"
+                disabled={!canSend || !draft.trim()}
+                aria-label="Send"
+              >
+                <ArrowUp size={22} />
+              </button>
+            )}
+          </form>
+          <p className="composer-caption">
+            Your workspace. Your models. Your call.
+          </p>
+        </div>
       </main>
+      {dialog ? (
+        <HostDialogs kind={dialog} api={api} onClose={() => setDialog(null)} />
+      ) : null}
     </div>
   );
 }
-
-/* — Approvals ——————————————————————————— */
 
 function ApprovalCard({
   approval,
@@ -206,115 +447,103 @@ function ApprovalCard({
   onResolve: (granted: boolean) => void;
 }): JSX.Element {
   return (
-    <div className="approval-card">
-      <div className="approval-kind">⏸ {prettyKind(approval.kind)} · needs you</div>
-      <div className="approval-summary">{approval.summary}</div>
-      <div className="approval-meta">
-        asked {ageLabel(approval.createdAt, Date.now())}
-        {approval.expiresAt === null ? ' · no expiry' : ` · expires ${remainingLabel(approval.expiresAt, Date.now())}`}
+    <article className="approval-card">
+      <div className="approval-copy">
+        <span className="approval-label">
+          <ShieldCheck size={15} />
+          Your approval, please
+        </span>
+        <strong>{approval.summary}</strong>
+        <small>
+          Requested {ageLabel(approval.createdAt, Date.now())}
+          {approval.expiresAt
+            ? ` · expires ${remainingLabel(approval.expiresAt, Date.now())}`
+            : ''}
+        </small>
       </div>
       <div className="approval-actions">
-        <button type="button" className="btn-approve" onClick={() => onResolve(true)} disabled={busy}>
-          {busy ? 'Answering…' : 'Approve'}
-        </button>
-        <button type="button" className="btn-deny" onClick={() => onResolve(false)} disabled={busy}>
+        <button
+          className="btn-deny"
+          type="button"
+          disabled={busy}
+          onClick={() => onResolve(false)}
+        >
           Deny
         </button>
+        <button
+          className="btn-approve"
+          type="button"
+          disabled={busy}
+          onClick={() => onResolve(true)}
+        >
+          <Check size={15} />
+          Approve
+        </button>
       </div>
-    </div>
+    </article>
   );
 }
-
-/* — Entries ————————————————————————————— */
-
-function EntryView({ entry }: { entry: Entry }): JSX.Element {
+function EntryView({
+  entry,
+  avatar,
+  name,
+}: {
+  entry: Entry;
+  avatar: string;
+  name: string;
+}): JSX.Element {
   const [open, setOpen] = useState(false);
-  const streaming = entry.id.startsWith('pending:');
-
-  if (entry.kind === 'tool-call' || entry.kind === 'tool-result') {
+  if (entry.kind === 'tool-call' || entry.kind === 'tool-result')
     return (
-      <div className={`tool-block ${entry.kind === 'tool-result' ? 'result' : ''}`}>
-        <button type="button" className="tool-head" onClick={() => setOpen((v) => !v)}>
-          <span className="arrow">{entry.kind === 'tool-call' ? '→' : '←'}</span>
-          <span className="tname">{entry.toolName ?? 'tool'}</span>
-          <span className="tkind">{entry.kind === 'tool-call' ? 'call' : 'result'} · {open ? 'hide' : 'show'}</span>
+      <div className="tool-block">
+        <button
+          type="button"
+          className="tool-head"
+          aria-expanded={open}
+          onClick={() => setOpen(!open)}
+        >
+          <ChevronRight className={open ? 'rotated' : ''} size={15} />
+          <span>
+            {entry.toolName ?? 'Tool'}
+            <small>{entry.kind === 'tool-call' ? 'Requested' : 'Result'}</small>
+          </span>
         </button>
-        {open || streaming ? <pre className="tool-body">{truncate(entry.content, 4000)}</pre> : null}
+        {open ? (
+          <pre className="tool-body">{truncate(entry.content, 6000)}</pre>
+        ) : null}
       </div>
     );
-  }
-
-  const who = entry.role === 'user' ? 'user' : entry.role === 'system' ? 'system' : 'agent';
-  const failed = entry.kind === 'error';
+  const user = entry.role === 'user';
+  const system = entry.role === 'system';
   return (
-    <div className={`msg ${who}`}>
-      {who === 'agent' ? (
-        <span className="avatar" style={{ background: 'linear-gradient(150deg,#7defb0,#2f9c6a)' }}>
-          ✦
-        </span>
+    <article
+      className={`message ${user ? 'user-message' : system ? 'system-message' : 'bot-message'} ${entry.kind === 'error' ? 'message-error' : ''}`}
+    >
+      {!user && !system ? (
+        <img src={avatar} width="32" height="32" alt="" />
       ) : null}
-      <div style={{ maxWidth: who === 'user' ? '78%' : '100%', flex: who === 'user' ? undefined : 1 }}>
-        <div className={`bubble ${streaming ? 'streaming' : ''}`} style={failed ? { borderColor: '#5a2a24' } : undefined}>
-          {entry.content}
-          {streaming ? <span className="cursor">▍</span> : null}
+      <div className="message-content">
+        {!user && !system ? <strong>{name}</strong> : null}
+        <div className="markdown">
+          <Suspense fallback={<p className="plain-message">{entry.content}</p>}>
+            <RichText text={entry.content} />
+          </Suspense>
+          {entry.id.startsWith('pending:') ? (
+            <span className="stream-cursor" />
+          ) : null}
         </div>
-        <div className="msg-meta">
-          {who} · {formatTime(entry.createdAt)}
-        </div>
+        <small className="message-time">{formatTime(entry.createdAt)}</small>
       </div>
-    </div>
-  );
-}
-
-/* — Empty states ———————————————————————— */
-
-function ThreadEmpty({ agent, onSuggest }: { agent: Agent; onSuggest: (t: string) => void }): JSX.Element {
-  return (
-    <div className="empty">
-      <div className="empty-mark">✦</div>
-      <h2>Talk to {agent.name}</h2>
-      <p>Give it real work. Anything that spends, sends or changes the outside world waits for your yes.</p>
-      <div className="suggestions">
-        <button type="button" className="suggestion" onClick={() => onSuggest('Summarize what changed in the workspace today.')}>
-          <b>Summarize the day</b>
-          <span>Read the workspace and report back.</span>
-        </button>
-        <button type="button" className="suggestion" onClick={() => onSuggest('Check my inbox and draft replies, but do not send anything.')}>
-          <b>Triage my inbox</b>
-          <span>Drafts only — sending needs approval.</span>
-        </button>
-        <button type="button" className="suggestion" onClick={() => onSuggest('Look for failing tests and propose a fix.')}>
-          <b>Find failing tests</b>
-          <span>Inspect, explain, then ask before editing.</span>
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function WelcomeState({ agents, onPick }: { agents: Agent[]; onPick: (id: string) => void }): JSX.Element {
-  return (
-    <div className="empty">
-      <div className="empty-mark">✦</div>
-      <h2>Your agents live here</h2>
-      <p>Pick one from the sidebar to see its thread. Runs stream in live, approvals park at the top.</p>
-      {agents.length > 0 ? (
-        <div className="suggestions">
-          {agents.slice(0, 3).map((a) => (
-            <button key={a.id} type="button" className="suggestion" onClick={() => onPick(a.id)}>
-              <b>{a.name}</b>
-              <span>{a.model ?? 'host default model'}</span>
-            </button>
-          ))}
-        </div>
-      ) : null}
-    </div>
+    </article>
   );
 }
 
 /* — Helpers (why: deterministic presentation, no network, no deps) ——————— */
 
-function latestRun(runs: Record<string, Run>, agentId: string | null): Run | null {
+function latestRun(
+  runs: Record<string, Run>,
+  agentId: string | null,
+): Run | null {
   if (agentId === null) return null;
   let best: Run | null = null;
   for (const run of Object.values(runs)) {
@@ -343,7 +572,11 @@ export function avatarFor(name: string): string {
  * Statuses that mean a run is still in flight. A run that has reached a terminal
  * status is over, even though its row stays in the store.
  */
-const LIVE_RUN_STATUSES: readonly RunStatus[] = ['queued', 'running', 'waiting-approval'];
+const LIVE_RUN_STATUSES: readonly RunStatus[] = [
+  'queued',
+  'running',
+  'waiting-approval',
+];
 
 function runInFlight(run: Run | null): boolean {
   return run !== null && LIVE_RUN_STATUSES.includes(run.status);
@@ -355,14 +588,22 @@ function runInFlight(run: Run | null): boolean {
  * Both eyes open while a human-backed device has a run in flight, one eye for a
  * device that may only watch, and closed when nothing is running at all.
  */
-export function keeperState(deviceClass: 'person' | 'background' | null, run: Run | null): string {
+export function keeperState(
+  deviceClass: 'person' | 'background' | null,
+  run: Run | null,
+): string {
   if (!runInFlight(run)) return keeperAsleep;
   return deviceClass === 'person' ? keeperPerson : keeperBackground;
 }
 
-export function keeperNote(deviceClass: 'person' | 'background' | null, run: Run | null): string {
-  if (deviceClass !== 'person') return 'A paired device. It can watch, and cannot act outward.';
-  if (run !== null && run.status === 'waiting-approval') return 'Waiting on your approval.';
+export function keeperNote(
+  deviceClass: 'person' | 'background' | null,
+  run: Run | null,
+): string {
+  if (deviceClass !== 'person')
+    return 'A paired device. It can watch, and cannot act outward.';
+  if (run !== null && run.status === 'waiting-approval')
+    return 'Waiting on your approval.';
   if (runInFlight(run)) return 'Working.';
   return 'You are here, so this device can act. Nothing is running.';
 }
@@ -400,7 +641,9 @@ export function remainingLabel(expiresAt: string, now: number): string {
 }
 
 function truncate(text: string, max: number): string {
-  return text.length > max ? `${text.slice(0, max)}\n… (${text.length - max} more chars)` : text;
+  return text.length > max
+    ? `${text.slice(0, max)}\n… (${text.length - max} more chars)`
+    : text;
 }
 
 function formatTime(iso: string): string {

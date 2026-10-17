@@ -1,0 +1,18 @@
+{
+  "name": "guhbot-aws",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -b",
+    "synth": "pnpm build && cdk synth",
+    "deploy": "pnpm build && cdk deploy GuhbotSite --require-approval never"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "aws-cdk": "^2.1145.0",
+    "aws-cdk-lib": "^2.200.0",
+    "constructs": "^10.4.2",
+    "esbuild": "^0.28.2",
+    "typescript": "^5.7.2"
+  }
+}

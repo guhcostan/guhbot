@@ -100,6 +100,23 @@ describe('authorization boundary', () => {
     await host.close();
   });
 
+  it('refuses the old unlock proof over the network and requires operator delegation', async () => {
+    const host = makeHost();
+    const pairing = host.beginPairing();
+    const { device } = host.claimPairing({ ...pairing, deviceName: 'Phone', platform: 'ios', requestedClass: 'background' });
+    const remote = host.createSession('network', device);
+    await expect(host.dispatch(remote, 'devices.unlock', { localPresenceToken: 'local-console-confirmed' })).rejects.toMatchObject({ code: 'forbidden' });
+    await expect(host.dispatch(remote, 'devices.setAccess', { deviceId: device.id, deviceClass: 'person' })).rejects.toMatchObject({ code: 'forbidden' });
+    const operator = host.createSession('local');
+    await host.dispatch(operator, 'devices.setAccess', { deviceId: device.id, deviceClass: 'person' });
+    await expect(host.dispatch(remote, 'agents.create', { name: 'From phone' })).resolves.toMatchObject({ name: 'From phone' });
+    await host.dispatch(operator, 'devices.setAccess', { deviceId: device.id, deviceClass: 'background' });
+    await expect(host.dispatch(remote, 'agents.create', { name: 'Refused after demotion' })).rejects.toMatchObject({ code: 'forbidden' });
+    await host.dispatch(operator, 'devices.revoke', { deviceId: device.id });
+    await expect(host.dispatch(remote, 'agents.list', {})).rejects.toMatchObject({ code: 'unauthenticated' });
+    await host.close();
+  });
+
   it('rejects pairing.begin over a network channel', async () => {
     const host = makeHost();
     const remote = host.createSession('network');

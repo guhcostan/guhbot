@@ -25,7 +25,7 @@ import type { McpServerConfig } from '@guhbot/mcp';
 import { createCliEngines, createEngineRegistry } from '@guhbot/engine-cli';
 import { createCompanion, createHostVerifyToken, type Companion } from '@guhbot/companion';
 
-const VERSION = '0.1.0';
+const VERSION = '0.2.0';
 
 function defaultDataDir(): string {
   return join(homedir(), '.guhbot');

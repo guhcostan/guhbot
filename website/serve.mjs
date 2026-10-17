@@ -11,7 +11,7 @@
  *   node website/serve.mjs --port 8080
  */
 import { createServer } from 'node:http';
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, writeFile, rename } from 'node:fs/promises';
 import { existsSync, mkdirSync } from 'node:fs';
 import { dirname, extname, join, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -37,28 +37,38 @@ const { values } = parseArgs({
 class FileWaitlistStore {
   constructor(file) {
     this.file = file;
-    if (!existsSync(file)) {
-      mkdirSync(dirname(file), { recursive: true });
-      writeFile(file, '[]\n').catch(() => undefined);
-    }
+    this.pending = Promise.resolve();
+    mkdirSync(dirname(file), { recursive: true });
   }
 
   async read() {
     try {
       const parsed = JSON.parse(await readFile(this.file, 'utf8'));
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
+      if (!Array.isArray(parsed)) throw new Error('invalid waitlist file');
+      return parsed;
+    } catch (error) {
+      if (error.code === 'ENOENT') return [];
+      throw error;
     }
   }
 
-  async add(email, source, at) {
-    const rows = await this.read();
-    const key = email.toLowerCase();
-    if (rows.some((row) => row.email === key)) return 'duplicate';
-    rows.push({ email: key, source, at });
-    await writeFile(this.file, `${JSON.stringify(rows, null, 2)}\n`);
-    return 'added';
+  add(email, source, at) {
+    // Serialize the read-modify-write and atomically replace the file: a burst
+    // of form submissions must not overwrite previously accepted signups.
+    const write = this.pending.then(async () => {
+      const rows = await this.read();
+      const key = email.toLowerCase();
+      if (rows.some((row) => row.email === key)) return 'duplicate';
+      rows.push({ email: key, source, at });
+      const temporary = `${this.file}.tmp`;
+      await writeFile(temporary, `${JSON.stringify(rows, null, 2)}\n`, {
+        mode: 0o600,
+      });
+      await rename(temporary, this.file);
+      return 'added';
+    });
+    this.pending = write.catch(() => undefined);
+    return write;
   }
 }
 
@@ -76,17 +86,29 @@ const TYPES = {
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.webp': 'image/webp',
+  '.ttf': 'font/ttf',
   '.woff2': 'font/woff2',
   '.ico': 'image/x-icon',
 };
 
 const server = createServer((req, res) => {
   void (async () => {
-    const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
+    const url = new URL(
+      req.url ?? '/',
+      `http://${req.headers.host ?? 'localhost'}`,
+    );
 
     if (url.pathname === '/api/waitlist') {
       const chunks = [];
-      for await (const chunk of req) chunks.push(chunk);
+      let size = 0;
+      for await (const chunk of req) {
+        size += chunk.length;
+        if (size > 2048) {
+          res.writeHead(413).end('request body is too large');
+          return;
+        }
+        chunks.push(chunk);
+      }
       const result = await handleWaitlist({
         requestContext: { http: { method: req.method ?? 'GET' } },
         headers: req.headers,
@@ -103,7 +125,16 @@ const server = createServer((req, res) => {
     //
     // `resolve` would be wrong here: given an absolute second argument it
     // discards the first, so `resolve(root, '/index.html')` is `/index.html`.
-    const requested = url.pathname === '/' ? 'index.html' : url.pathname.replace(/^\/+/, '');
+    const requested =
+      url.pathname === '/' ? 'index.html' : url.pathname.replace(/^\/+/, '');
+    // Source and local signup files must never be downloadable by a visitor.
+    if (
+      requested.split('/').some((part) => part.startsWith('.')) ||
+      ['serve.mjs', 'assets/generate.mjs'].includes(requested)
+    ) {
+      res.writeHead(404).end('not found');
+      return;
+    }
     const target = resolve(join(here, requested));
     if (target !== here && !target.startsWith(here + sep)) {
       res.writeHead(403).end('forbidden');
@@ -120,10 +151,15 @@ const server = createServer((req, res) => {
     } catch {
       res.writeHead(404, { 'content-type': 'text/plain' }).end('not found');
     }
-  })();
+  })().catch(() => {
+    if (!res.headersSent) res.writeHead(500);
+    res.end('request failed');
+  });
 });
 
 const port = Number(values.port);
 server.listen(port, values.host, () => {
-  process.stdout.write(`\n  site + waitlist → http://${values.host}:${port}\n  entries        → ${values['data-file']}\n\n`);
+  process.stdout.write(
+    `\n  site + waitlist → http://${values.host}:${port}\n  entries        → ${values['data-file']}\n\n`,
+  );
 });

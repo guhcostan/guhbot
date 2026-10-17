@@ -16,3 +16,15 @@ coverage/
 
 # Website dev artifacts
 website/.waitlist-dev.json
+
+# Generated native projects and Expo local state
+apps/mobile/ios/
+apps/mobile/android/
+apps/mobile/.expo/
+release/
+
+# CDK generated deployment assets
+**/cdk.out/
+
+# Also ignore local dependency symlinks
+**/node_modules

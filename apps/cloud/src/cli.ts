@@ -20,6 +20,10 @@ async function main(): Promise<void> {
     options: {
       root: { type: 'string', default: join(process.cwd(), 'guhbot-cloud') },
       port: { type: 'string', default: '8788' },
+      host: {
+        type: 'string',
+        default: process.env['GUHBOT_CLOUD_HOST'] ?? '127.0.0.1',
+      },
       'base-url': { type: 'string' },
       model: { type: 'string' },
       'max-tenants': { type: 'string', default: '100' },
@@ -37,6 +41,7 @@ async function main(): Promise<void> {
         'Options:',
         '  --root <path>          Root directory holding one subdirectory per tenant',
         '  --port <n>             Port to bind (default 8788)',
+        '  --host <address>       Bind address (default 127.0.0.1; use TLS for remote access)',
         '  --base-url <url>       OpenAI-compatible API base for every tenant',
         '  --model <name>         Default model',
         '  --max-tenants <n>      Refuse to start more than this many hosts',
@@ -62,6 +67,7 @@ async function main(): Promise<void> {
       .split(',')
       .map((h) => h.trim())
       .filter((h) => h.length > 0),
+    bindHost: values.host,
   });
 
   const port = await gateway.listen(Number(values.port));
@@ -71,19 +77,21 @@ async function main(): Promise<void> {
       '',
       '  guhbot cloud gateway',
       '',
-      `  listening        http://127.0.0.1:${port}`,
+      `  listening        http://${values.host}:${port}`,
       `  tenant root      ${values.root}`,
       `  inference        ${values['base-url'] ? `ready (${values.model ?? 'provider default'})` : 'NOT CONFIGURED'}`,
       `  provisioning     ${operatorToken ? 'enabled (operator token set)' : 'DISABLED — set GUHBOT_CLOUD_OPERATOR_TOKEN'}`,
       '',
-      '  Each tenant gets its own host process, data directory and master key.',
+      '  Each tenant has separate data and keys. Shell execution is disabled in the shared gateway.',
       '  Clients connect to ws://<gateway>/t/<tenantId>/rpc?token=<tenant token>.',
       '',
     ].join('\n'),
   );
 
   const shutdown = async (signal: string): Promise<void> => {
-    process.stdout.write(`\n  ${signal} received, stopping ${gateway.listTenants().length} tenant host(s).\n`);
+    process.stdout.write(
+      `\n  ${signal} received, stopping ${gateway.listTenants().length} tenant host(s).\n`,
+    );
     await gateway.close();
     process.exit(0);
   };
@@ -92,6 +100,8 @@ async function main(): Promise<void> {
 }
 
 main().catch((error: unknown) => {
-  process.stderr.write(`fatal: ${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
+  process.stderr.write(
+    `fatal: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}\n`,
+  );
   process.exit(1);
 });

@@ -12,7 +12,11 @@
 
 export interface WaitlistStore {
   /** Returns 'duplicate' when the address is already present. */
-  add(email: string, source: string, at: string): Promise<'added' | 'duplicate'>;
+  add(
+    email: string,
+    source: string,
+    at: string,
+  ): Promise<'added' | 'duplicate'>;
 }
 
 /** In-memory store. Used by tests and by a single-instance local run. */
@@ -51,7 +55,11 @@ export class DynamoWaitlistStore implements WaitlistStore {
     },
   ) {}
 
-  async add(email: string, source: string, at: string): Promise<'added' | 'duplicate'> {
+  async add(
+    email: string,
+    source: string,
+    at: string,
+  ): Promise<'added' | 'duplicate'> {
     const { PutItemCommand } = this.commands;
     try {
       await this.client.send(
@@ -98,7 +106,10 @@ export interface WaitlistOptions {
   originSecret?: string;
 }
 
-function headerValue(headers: Record<string, string | undefined> | undefined, name: string): string | null {
+function headerValue(
+  headers: Record<string, string | undefined> | undefined,
+  name: string,
+): string | null {
   if (!headers) return null;
   // HTTP headers are case-insensitive, and API Gateway does not normalise them.
   for (const [key, value] of Object.entries(headers)) {
@@ -110,7 +121,8 @@ function headerValue(headers: Record<string, string | undefined> | undefined, na
 function constantTimeEquals(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   let diff = 0;
-  for (let i = 0; i < a.length; i += 1) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  for (let i = 0; i < a.length; i += 1)
+    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return diff === 0;
 }
 
@@ -141,31 +153,69 @@ export function createWaitlistHandler(options: WaitlistOptions) {
 
     if (options.originSecret !== undefined && options.originSecret.length > 0) {
       const provided = headerValue(event.headers, 'x-guhbot-origin');
-      if (provided === null || !constantTimeEquals(provided, options.originSecret)) {
+      if (
+        provided === null ||
+        !constantTimeEquals(provided, options.originSecret)
+      ) {
         // 403, and no detail: a caller probing for the right value learns nothing.
-        return { statusCode: 403, headers, body: JSON.stringify({ error: 'forbidden' }) };
+        return {
+          statusCode: 403,
+          headers,
+          body: JSON.stringify({ error: 'forbidden' }),
+        };
       }
     }
 
-    const method = event.requestContext?.http?.method ?? event.httpMethod ?? 'POST';
+    const method =
+      event.requestContext?.http?.method ?? event.httpMethod ?? 'POST';
 
     if (method === 'OPTIONS') {
       return { statusCode: 204, headers, body: '' };
     }
     if (method !== 'POST') {
-      return { statusCode: 405, headers, body: JSON.stringify({ error: 'method not allowed' }) };
+      return {
+        statusCode: 405,
+        headers,
+        body: JSON.stringify({ error: 'method not allowed' }),
+      };
     }
 
-    const raw = event.isBase64Encoded === true ? Buffer.from(event.body ?? '', 'base64').toString('utf8') : (event.body ?? '');
-    if (raw.length > maxBody) {
-      return { statusCode: 413, headers, body: JSON.stringify({ error: 'request body is too large' }) };
+    const raw =
+      event.isBase64Encoded === true
+        ? Buffer.from(event.body ?? '', 'base64').toString('utf8')
+        : (event.body ?? '');
+    if (Buffer.byteLength(raw, 'utf8') > maxBody) {
+      return {
+        statusCode: 413,
+        headers,
+        body: JSON.stringify({ error: 'request body is too large' }),
+      };
     }
 
     let parsed: unknown;
     try {
-      parsed = JSON.parse(raw.length > 0 ? raw : '{}');
+      const contentType = headerValue(event.headers, 'content-type') ?? '';
+      parsed = contentType.startsWith('application/x-www-form-urlencoded')
+        ? Object.fromEntries(new URLSearchParams(raw))
+        : JSON.parse(raw.length > 0 ? raw : '{}');
     } catch {
-      return { statusCode: 400, headers, body: JSON.stringify({ error: 'body must be JSON' }) };
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'body must be JSON' }),
+      };
+    }
+
+    if (
+      typeof parsed !== 'object' ||
+      parsed === null ||
+      Array.isArray(parsed)
+    ) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'body must be an object' }),
+      };
     }
 
     const candidate = (parsed as { email?: unknown }).email;
@@ -173,26 +223,60 @@ export function createWaitlistHandler(options: WaitlistOptions) {
     const email = typeof candidate === 'string' ? candidate.trim() : '';
 
     if (email.length === 0) {
-      return { statusCode: 400, headers, body: JSON.stringify({ error: 'email is required' }) };
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'email is required' }),
+      };
     }
     if (email.length > MAX_EMAIL || !EMAIL.test(email)) {
       // Never echo the address back: a response body is a place it can leak into
       // logs, error trackers and browser history.
-      return { statusCode: 400, headers, body: JSON.stringify({ error: 'that does not look like an email address' }) };
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({
+          error: 'that does not look like an email address',
+        }),
+      };
     }
 
-    const origin = typeof source === 'string' && source.length > 0 ? source.slice(0, 64) : 'unknown';
+    const origin =
+      typeof source === 'string' && source.length > 0
+        ? source.slice(0, 64)
+        : 'unknown';
 
     try {
-      const result = await options.store.add(email, origin, now().toISOString());
+      const result = await options.store.add(
+        email,
+        origin,
+        now().toISOString(),
+      );
       if (result === 'duplicate') {
-        return { statusCode: 409, headers, body: JSON.stringify({ status: 'already-on-list' }) };
+        return {
+          statusCode: 409,
+          headers,
+          body: JSON.stringify({ status: 'already-on-list' }),
+        };
       }
-      return { statusCode: 200, headers, body: JSON.stringify({ status: 'added' }) };
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({ status: 'added' }),
+      };
     } catch (error) {
       // A storage failure is ours, not the visitor's. Say so without detail.
-      console.error('waitlist storage failure:', error instanceof Error ? error.message : String(error));
-      return { statusCode: 503, headers, body: JSON.stringify({ error: 'could not record that right now, please retry' }) };
+      console.error(
+        'waitlist storage failure:',
+        error instanceof Error ? error.message : String(error),
+      );
+      return {
+        statusCode: 503,
+        headers,
+        body: JSON.stringify({
+          error: 'could not record that right now, please retry',
+        }),
+      };
     }
   };
 }

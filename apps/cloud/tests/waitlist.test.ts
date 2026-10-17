@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { createWaitlistHandler, MemoryWaitlistStore, type WaitlistStore } from '../src/waitlist.js';
+import {
+  createWaitlistHandler,
+  MemoryWaitlistStore,
+  type WaitlistStore,
+} from '../src/waitlist.js';
 
 /**
  * The waitlist is small, so the tests are about the things that would be
@@ -8,10 +12,38 @@ import { createWaitlistHandler, MemoryWaitlistStore, type WaitlistStore } from '
  */
 
 function post(body: unknown, overrides: Record<string, unknown> = {}) {
-  return { requestContext: { http: { method: 'POST' } }, body: JSON.stringify(body), ...overrides };
+  return {
+    requestContext: { http: { method: 'POST' } },
+    body: JSON.stringify(body),
+    ...overrides,
+  };
 }
 
 describe('waitlist', () => {
+  it('refuses non-object JSON and counts UTF-8 bytes', async () => {
+    const handle = createWaitlistHandler({
+      store: new MemoryWaitlistStore(),
+      maxBodyBytes: 80,
+    });
+    for (const body of [null, [], 'text', 42])
+      expect((await handle(post(body))).statusCode).toBe(400);
+    expect(
+      (await handle(post({ email: 'qa@example.test', note: 'é'.repeat(40) })))
+        .statusCode,
+    ).toBe(413);
+  });
+
+  it('accepts the actual HTML form without requiring JavaScript', async () => {
+    const store = new MemoryWaitlistStore();
+    const handle = createWaitlistHandler({ store });
+    const response = await handle({
+      requestContext: { http: { method: 'POST' } },
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'email=qa%40example.test',
+    });
+    expect(response.statusCode).toBe(200);
+    expect(store.size).toBe(1);
+  });
   it('accepts a valid address', async () => {
     const store = new MemoryWaitlistStore();
     const handle = createWaitlistHandler({ store });
@@ -29,14 +61,19 @@ describe('waitlist', () => {
     expect(JSON.parse(second.body)).toEqual({ status: 'already-on-list' });
   });
 
-  it.each(['', '   ', 'not-an-email', 'a@b', 'a@b.c', '@example.com', 'a b@example.com'])(
-    'rejects %j',
-    async (email) => {
-      const handle = createWaitlistHandler({ store: new MemoryWaitlistStore() });
-      const response = await handle(post({ email }));
-      expect(response.statusCode).toBe(400);
-    },
-  );
+  it.each([
+    '',
+    '   ',
+    'not-an-email',
+    'a@b',
+    'a@b.c',
+    '@example.com',
+    'a b@example.com',
+  ])('rejects %j', async (email) => {
+    const handle = createWaitlistHandler({ store: new MemoryWaitlistStore() });
+    const response = await handle(post({ email }));
+    expect(response.statusCode).toBe(400);
+  });
 
   it('rejects an address longer than the legal maximum', async () => {
     const handle = createWaitlistHandler({ store: new MemoryWaitlistStore() });
@@ -55,19 +92,38 @@ describe('waitlist', () => {
   });
 
   it('rejects a non-POST method and handles the CORS preflight', async () => {
-    const handle = createWaitlistHandler({ store: new MemoryWaitlistStore(), allowedOrigin: 'https://guhbot.dev' });
+    const handle = createWaitlistHandler({
+      store: new MemoryWaitlistStore(),
+      allowedOrigin: 'https://guhbot.dev',
+    });
     const get = await handle({ requestContext: { http: { method: 'GET' } } });
     expect(get.statusCode).toBe(405);
 
-    const preflight = await handle({ requestContext: { http: { method: 'OPTIONS' } } });
+    const preflight = await handle({
+      requestContext: { http: { method: 'OPTIONS' } },
+    });
     expect(preflight.statusCode).toBe(204);
-    expect(preflight.headers['access-control-allow-origin']).toBe('https://guhbot.dev');
+    expect(preflight.headers['access-control-allow-origin']).toBe(
+      'https://guhbot.dev',
+    );
   });
 
   it('rejects a body that is not JSON, and one that is too large', async () => {
-    const handle = createWaitlistHandler({ store: new MemoryWaitlistStore(), maxBodyBytes: 64 });
-    expect((await handle({ requestContext: { http: { method: 'POST' } }, body: 'not json' })).statusCode).toBe(400);
-    const big = await handle(post({ email: 'a@example.com', padding: 'x'.repeat(200) }));
+    const handle = createWaitlistHandler({
+      store: new MemoryWaitlistStore(),
+      maxBodyBytes: 64,
+    });
+    expect(
+      (
+        await handle({
+          requestContext: { http: { method: 'POST' } },
+          body: 'not json',
+        })
+      ).statusCode,
+    ).toBe(400);
+    const big = await handle(
+      post({ email: 'a@example.com', padding: 'x'.repeat(200) }),
+    );
     expect(big.statusCode).toBe(413);
   });
 
@@ -91,7 +147,10 @@ describe('waitlist', () => {
         return 'added';
       },
     };
-    const handle = createWaitlistHandler({ store, now: () => new Date('2026-01-02T03:04:05Z') });
+    const handle = createWaitlistHandler({
+      store,
+      now: () => new Date('2026-01-02T03:04:05Z'),
+    });
     await handle(post({ email: 'a@example.com', source: 'x'.repeat(500) }));
     expect(seen[0]?.email).toBe('a@example.com');
     expect(seen[0]?.source.length).toBe(64);
@@ -100,7 +159,10 @@ describe('waitlist', () => {
 
   it('refuses a request that did not come through the distribution', async () => {
     const store = new MemoryWaitlistStore();
-    const handle = createWaitlistHandler({ store, originSecret: 'cf-secret-value' });
+    const handle = createWaitlistHandler({
+      store,
+      originSecret: 'cf-secret-value',
+    });
 
     // No header: the raw Function URL being called directly.
     const direct = await handle(post({ email: 'direct@example.com' }));
@@ -108,13 +170,21 @@ describe('waitlist', () => {
     expect(store.size).toBe(0);
 
     // Wrong header.
-    const wrong = await handle(post({ email: 'wrong@example.com' }, { headers: { 'x-guhbot-origin': 'nope' } }));
+    const wrong = await handle(
+      post(
+        { email: 'wrong@example.com' },
+        { headers: { 'x-guhbot-origin': 'nope' } },
+      ),
+    );
     expect(wrong.statusCode).toBe(403);
 
     // Correct header, and the casing does not matter because HTTP headers are
     // case-insensitive and API Gateway does not normalise them.
     const right = await handle(
-      post({ email: 'through-cloudfront@example.com' }, { headers: { 'X-Guhbot-Origin': 'cf-secret-value' } }),
+      post(
+        { email: 'through-cloudfront@example.com' },
+        { headers: { 'X-Guhbot-Origin': 'cf-secret-value' } },
+      ),
     );
     expect(right.statusCode).toBe(200);
     expect(store.size).toBe(1);
@@ -122,14 +192,19 @@ describe('waitlist', () => {
 
   it('skips the origin check when no secret is configured, as in local development', async () => {
     const handle = createWaitlistHandler({ store: new MemoryWaitlistStore() });
-    expect((await handle(post({ email: 'local@example.com' }))).statusCode).toBe(200);
+    expect(
+      (await handle(post({ email: 'local@example.com' }))).statusCode,
+    ).toBe(200);
   });
 
   it('decodes a base64 body, which is how API Gateway delivers some requests', async () => {
     const handle = createWaitlistHandler({ store: new MemoryWaitlistStore() });
     const response = await handle({
       requestContext: { http: { method: 'POST' } },
-      body: Buffer.from(JSON.stringify({ email: 'b64@example.com' }), 'utf8').toString('base64'),
+      body: Buffer.from(
+        JSON.stringify({ email: 'b64@example.com' }),
+        'utf8',
+      ).toString('base64'),
       isBase64Encoded: true,
     });
     expect(response.statusCode).toBe(200);

@@ -1,3 +1,5 @@
+> October 17 update: operator-approved mobile access, persistent gateway state and the new clients supersede the older implementation status below. See the current README and dated research report. The shared gateway is not an OS sandbox.
+
 # Architecture
 
 This document explains the design: what the pieces are, why the seams are where
@@ -120,7 +122,7 @@ An unattended run will eventually want to do something that should not be
 automatic: run a destructive command, send a message as you, spend money. The
 run does not guess. It calls `requestApproval`, which writes an `Approval` row and
 parks the run in `waiting-approval`. Any client with a pending-approval view
-shows it. Resolving it requires `person` class, so a phone can *see* the request
+shows it. Resolving it requires `person` class, so a viewer phone can *see* the request
 and cannot *grant* it — which is the safe direction for a stolen device.
 
 A denied approval is returned to the model as an ordinary tool result, so the run
@@ -189,7 +191,7 @@ The mode is a property of the host, not of the code path:
 | Who holds the data directory | You | The operator |
 | Client connection | LAN or tunnel | Public endpoint |
 | Pairing | QR / code on your machine | Same protocol; operator may add an account layer in front |
-| Isolation | One user | One host process (or container) per tenant |
+| Isolation | One user | Separate runtime state per tenant in the gateway; containers required for OS isolation |
 
 Nothing in `host-core`, `agent` or `protocol` knows which of these it is in. The
 `mode` field exists so a client can *display* it, and so the hosted deployment
@@ -233,7 +235,7 @@ paired device can be stolen.**
 | Prompt injection drives a destructive shell command | `run_command` requires approval; no shell, argv array only; per-host deny list |
 | Prompt injection reads files outside the project | Every model-supplied path goes through `resolveInside`, which checks the resolved path and the canonical path of the nearest existing ancestor, defeating `..` and symlinks |
 | Tool execution leaks credentials to a child process | Child environments are stripped of `*_KEY`, `*_TOKEN`, `*_SECRET`, `*_PASSWORD`, `AWS_*` and friends |
-| A stolen phone drains an account | A paired device is always `background`; it can observe and cannot act outward |
+| A stolen phone drains an account | A paired device starts as `background`; explicit operator delegation is required to act |
 | A stolen laptop database yields credentials | Secret values are sealed under a 0600 master key; the wire has no way to read them |
 | A renderer compromise reaches the filesystem | `contextIsolation` + `sandbox` + `nodeIntegration: false`; the renderer gets a connection descriptor, and a CSP with no inline or remote script |
 | An agent exfiltrates via the network | Egress defaults to **deny all**; `http_fetch` and browser navigation reach only configured hosts |

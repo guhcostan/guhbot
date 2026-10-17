@@ -1,0 +1,13 @@
+.git
+**/node_modules
+**/dist
+**/ios
+**/android
+**/.expo
+recon
+release
+.env
+.env.*
+!.env.example
+**/*.log
+website/.waitlist*

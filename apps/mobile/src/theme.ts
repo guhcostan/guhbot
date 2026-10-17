@@ -1,25 +1,24 @@
 /**
  * Keeper theme: the single visual language shared by desktop, mobile and the
- * website. Dark-only on purpose: an agent console is a night-shift tool, and
- * one theme halves the QA surface.
+ * website. The light palette matches the desktop client and the public site.
  */
 export const colors = {
-  background: '#08090b',
-  sidebar: '#0b0e12',
-  surface: '#10151b',
-  surfaceAlt: '#151c24',
-  surfaceRaised: '#1a222c',
-  border: '#1e262f',
-  borderSoft: '#161c23',
-  text: '#eef2f6',
-  muted: '#9aa5b1',
-  faint: '#626d79',
-  accent: '#67e8a2',
-  accentInk: '#04120b',
-  info: '#8ab4f8',
-  good: '#67e8a2',
-  warn: '#e0b054',
-  bad: '#e0796a',
+  background: '#fafafd',
+  sidebar: '#f4f3f8',
+  surface: '#ffffff',
+  surfaceAlt: '#f3effb',
+  surfaceRaised: '#ebe5f7',
+  border: '#e4dcec',
+  borderSoft: '#eee8f4',
+  text: '#25232e',
+  muted: '#81748e',
+  faint: '#a093ae',
+  accent: '#6960e8',
+  accentInk: '#ffffff',
+  info: '#8c73c8',
+  good: '#6960e8',
+  warn: '#b58c4a',
+  bad: '#b25a72',
 } as const;
 
 export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 } as const;

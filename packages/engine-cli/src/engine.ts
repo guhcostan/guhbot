@@ -83,7 +83,7 @@ export function createCliEngine(spec: CliEngineSpec, runtime: CliEngineRuntime, 
               command,
               // The CLI sees the recent conversation rendered into the prompt;
               // it has no other way to know what a follow-up refers to.
-              args: spec.buildArgs(buildCliPrompt(context), options),
+              args: spec.buildArgs(buildCliPrompt(context), { ...options, ...(context.agent.model ? { model: context.agent.model } : {}) }),
               cwd: options.cwd,
               env: runtime.env,
               dialect: spec.dialect(),

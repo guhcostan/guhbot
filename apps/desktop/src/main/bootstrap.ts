@@ -19,8 +19,17 @@
  * renderer through the preload bridge. It never travels over the network, so
  * possessing it is equivalent to being at the machine.
  */
-import { AgentLoop, OpenAiCompatibleProvider, builtinTools, collectContributions, type Capability } from '@guhbot/agent';
+import {
+  AgentLoop,
+  OpenAiCompatibleProvider,
+  builtinTools,
+  collectContributions,
+  type Capability,
+} from '@guhbot/agent';
 import { Host } from '@guhbot/host-core';
+import type { RunExecutor } from '@guhbot/host-core';
+import { createCliEngines, createEngineRegistry } from '@guhbot/engine-cli';
+import { createCompanion, createHostVerifyToken } from '@guhbot/companion';
 import { HostServer } from '@guhbot/server';
 import { hashToken, newToken } from '@guhbot/host-core';
 
@@ -33,6 +42,14 @@ export interface BootstrapOptions {
   baseUrl?: string | undefined;
   apiKey?: string | undefined;
   model?: string | undefined;
+  /** Explicit CLI selection. Never silently falls back to a different provider. */
+  engine?: string | undefined;
+  companion?: {
+    port: number;
+    host?: string;
+    insecurePlaintext?: boolean;
+    allowedHosts?: string[];
+  };
   /** Working directory handed to filesystem-scoped tools. */
   cwd: string;
   /** Hosts agent tools may reach. Empty means no network egress. */
@@ -52,22 +69,45 @@ export interface BootstrapResult {
   /** Person-class token for the embedded renderer. Treat as a credential. */
   rendererToken: string;
   rendererDeviceId: string;
+  companionUrl?: string;
   port: number;
   close: () => Promise<void>;
 }
 
-export async function bootstrapHost(options: BootstrapOptions): Promise<BootstrapResult> {
+export async function bootstrapHost(
+  options: BootstrapOptions,
+): Promise<BootstrapResult> {
   const capabilities = options.capabilities ?? [];
-  const { tools: capabilityTools, extraMethods, flags } = collectContributions(capabilities);
+  const {
+    tools: capabilityTools,
+    extraMethods,
+    flags,
+  } = collectContributions(capabilities);
 
   const provider =
     options.baseUrl !== undefined
       ? new OpenAiCompatibleProvider({
           baseUrl: options.baseUrl,
           apiKey: options.apiKey,
-          ...(options.model !== undefined ? { defaultModel: options.model } : {}),
+          ...(options.model !== undefined
+            ? { defaultModel: options.model }
+            : {}),
         })
       : null;
+
+  let cliExecutor: RunExecutor | undefined;
+  if (options.engine) {
+    const engine = createEngineRegistry(createCliEngines()).require(
+      options.engine,
+    );
+    const probe = await engine.probe();
+    if (!probe.available)
+      throw new Error(probe.reason ?? `${options.engine} is not installed`);
+    cliExecutor = engine.createExecutor({
+      cwd: options.cwd,
+      ...(options.model ? { model: options.model } : {}),
+    });
+  }
 
   const host = new Host({
     dataDir: options.dataDir,
@@ -85,15 +125,20 @@ export async function bootstrapHost(options: BootstrapOptions): Promise<Bootstra
       // so a client is told what this build can really do.
       ...flags,
     },
-    ...(provider
-      ? {
-          executor: new AgentLoop({
-            provider,
-            tools: [...builtinTools({ allowedHosts: options.allowedHosts ?? [] }), ...capabilityTools],
-            cwd: options.cwd,
-          }),
-        }
-      : {}),
+    ...(cliExecutor
+      ? { executor: cliExecutor }
+      : provider
+        ? {
+            executor: new AgentLoop({
+              provider,
+              tools: [
+                ...builtinTools({ allowedHosts: options.allowedHosts ?? [] }),
+                ...capabilityTools,
+              ],
+              cwd: options.cwd,
+            }),
+          }
+        : {}),
     ...(Object.keys(extraMethods).length > 0 ? { extraMethods } : {}),
   });
 
@@ -104,6 +149,24 @@ export async function bootstrapHost(options: BootstrapOptions): Promise<Bootstra
     ...(options.port !== undefined ? { port: options.port } : {}),
   });
   const { port } = await server.listen();
+  const companion = options.companion
+    ? createCompanion({
+        harness: { port },
+        verifyToken: createHostVerifyToken(host),
+        ...options.companion,
+      })
+    : null;
+  let companionUrl: string | undefined;
+  if (companion) {
+    try {
+      const listening = await companion.listen();
+      companionUrl = `ws://127.0.0.1:${listening.port}/rpc`;
+    } catch (error) {
+      await server.close();
+      await host.close('companion failed to start');
+      throw error;
+    }
+  }
 
   // Mint the renderer's own person-class device. This is the one place a device
   // is created without the pairing flow, and it is legitimate because this code
@@ -122,7 +185,9 @@ export async function bootstrapHost(options: BootstrapOptions): Promise<Bootstra
   // authenticate, or the app would start with a dead connection.
   const verified = host.authenticate(token);
   if (verified === null) {
-    throw new Error('bootstrap minted a renderer device whose token does not authenticate');
+    throw new Error(
+      'bootstrap minted a renderer device whose token does not authenticate',
+    );
   }
 
   return {
@@ -131,8 +196,10 @@ export async function bootstrapHost(options: BootstrapOptions): Promise<Bootstra
     hostUrl: `ws://127.0.0.1:${port}/rpc`,
     rendererToken: token,
     rendererDeviceId: device.id,
+    ...(companionUrl ? { companionUrl } : {}),
     port,
     close: async () => {
+      await companion?.close();
       await server.close();
       for (const capability of capabilities) {
         await capability.dispose?.().catch(() => {
